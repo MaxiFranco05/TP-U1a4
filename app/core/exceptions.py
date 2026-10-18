@@ -4,6 +4,9 @@ from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException, status
 
 
+import re
+
+
 def _extract_constraint_name(exc: IntegrityError) -> str | None:
     """Extrae el nombre de la constraint desde IntegrityError (asyncpg, psycopg2, etc.)."""
     orig = getattr(exc, "orig", None)
@@ -17,16 +20,36 @@ def _extract_constraint_name(exc: IntegrityError) -> str | None:
         if constraint_name:
             return constraint_name
 
-    # psycopg2 y otros: constraint_name directo o en diag
+    # SQLAlchemy asyncpg wrapper: constraint_name puede estar directo en orig
     constraint_name = getattr(orig, "constraint_name", None)
     if constraint_name:
         return constraint_name
 
+    # Intentar extraer de __cause__ (excepción original de asyncpg)
+    cause = getattr(orig, "__cause__", None)
+    if cause is not None:
+        constraint_name = getattr(cause, "constraint_name", None)
+        if constraint_name:
+            return constraint_name
+
+    # psycopg2 y otros: constraint_name en diag
     diag = getattr(orig, "diag", None)
     if diag is not None:
         constraint_name = getattr(diag, "constraint_name", None)
         if constraint_name:
             return constraint_name
+
+    # Fallback: extraer del mensaje de error (asyncpg incluye "constraint \"name\"")
+    error_msg = str(orig)
+    match = re.search(r'constraint "([^"]+)"', error_msg)
+    if match:
+        return match.group(1)
+
+    # Fallback 2: extraer del mensaje principal de la IntegrityError
+    error_msg = str(exc)
+    match = re.search(r'constraint "([^"]+)"', error_msg)
+    if match:
+        return match.group(1)
 
     return None
 
@@ -54,6 +77,7 @@ def translate_integrity_error(exc: IntegrityError) -> HTTPException:
             "fk_libro_autor_autor": "El autor referenciado no existe",
             "fk_renglon_venta_venta": "La venta referenciada no existe",
             "fk_renglon_venta_libro": "El libro referenciado no existe",
+            "venta_cliente_id_fkey": "Cliente no encontrado",
             "perfil_cliente_cliente_id_fkey": "Cliente no encontrado",
         }
         detail = mapping.get(constraint_name, detail)

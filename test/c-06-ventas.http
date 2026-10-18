@@ -1,0 +1,132 @@
+### Create venta - happy path (1 line) → 201
+POST http://localhost:8000/ventas/
+Content-Type: application/json
+
+{
+  "cliente_id": 1,
+  "renglones": [
+    {
+      "libro_id": 1,
+      "cantidad": 2
+    }
+  ]
+}
+
+### Create venta - happy path (multiple lines) → 201
+POST http://localhost:8000/ventas/
+Content-Type: application/json
+
+{
+  "cliente_id": 1,
+  "renglones": [
+    {
+      "libro_id": 1,
+      "cantidad": 2
+    },
+    {
+      "libro_id": 2,
+      "cantidad": 1
+    }
+  ]
+}
+
+### Create venta - empty renglones → 422
+POST http://localhost:8000/ventas/
+Content-Type: application/json
+
+{
+  "cliente_id": 1,
+  "renglones": []
+}
+
+### Create venta - duplicate libro_id → 422
+POST http://localhost:8000/ventas/
+Content-Type: application/json
+
+{
+  "cliente_id": 1,
+  "renglones": [
+    {
+      "libro_id": 1,
+      "cantidad": 1
+    },
+    {
+      "libro_id": 1,
+      "cantidad": 2
+    }
+  ]
+}
+
+### Create venta - cantidad zero → 422
+POST http://localhost:8000/ventas/
+Content-Type: application/json
+
+{
+  "cliente_id": 1,
+  "renglones": [
+    {
+      "libro_id": 1,
+      "cantidad": 0
+    }
+  ]
+}
+
+### Create venta - cantidad negative → 422
+POST http://localhost:8000/ventas/
+Content-Type: application/json
+
+{
+  "cliente_id": 1,
+  "renglones": [
+    {
+      "libro_id": 1,
+      "cantidad": -1
+    }
+  ]
+}
+
+### Create venta - non-existent cliente → 409
+POST http://localhost:8000/ventas/
+Content-Type: application/json
+
+{
+  "cliente_id": 99999,
+  "renglones": [
+    {
+      "libro_id": 1,
+      "cantidad": 1
+    }
+  ]
+}
+
+### Create venta - non-existent libro → 409
+POST http://localhost:8000/ventas/
+Content-Type: application/json
+
+{
+  "cliente_id": 1,
+  "renglones": [
+    {
+      "libro_id": 99999,
+      "cantidad": 1
+    }
+  ]
+}
+
+### Get venta by id - with lines (200)
+GET http://localhost:8000/ventas/1
+
+### Get venta by id - not found (404)
+GET http://localhost:8000/ventas/999
+
+### List ventas - default pagination (200)
+GET http://localhost:8000/ventas/
+
+### List ventas - custom pagination (200)
+GET http://localhost:8000/ventas/?limit=5&offset=0
+
+### List ventas - invalid limit (422)
+GET http://localhost:8000/ventas/?limit=101
+
+### List ventas - invalid offset (422)
+GET http://localhost:8000/ventas/?offset=-1

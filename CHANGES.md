@@ -193,7 +193,7 @@ Paso │ Agente A (Catálogo)            │ Agente B (Clientes/Ventas)       �
 ---
 
 ### [C-06] `ventas-alta-riesgo`
-- **Estado**: `[ ]` pendiente
+- **Estado**: `[x]` completado
 - **Scope**: Alta de venta con renglones + aviso en segundo plano (US-030 — riesgo principal)
   - `POST /ventas/` con `{cliente_id, renglones: [{libro_id, cantidad}]}` (DTO anidado, RN-04; precio/total/fecha **no** viajan en el DTO)
   - Validación DTO: ≥ 1 renglón y sin libros repetidos → 422 (RN-05); service lee cada `Libro`, **copia** `precio_unitario` (RN-06), calcula subtotales y `total` Decimal (RN-07); agrega renglones a `venta.renglones` (composición) y persiste en una transacción
