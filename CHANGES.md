@@ -174,7 +174,7 @@ Paso │ Agente A (Catálogo)            │ Agente B (Clientes/Ventas)       �
 > C-05 puede arrancar en GATE 2 en paralelo con C-03. C-06 requiere C-04 + C-05 y se recomienda en par (riesgo RN-04..RN-07).
 
 ### [C-05] `clientes-perfil`
-- **Estado**: `[ ]` pendiente
+- **Estado**: `[x]` completado
 - **Scope**: CRUD de clientes + perfil único + historial (US-020, US-021)
   - `POST/GET/PATCH /clientes/` paginado; `GET /clientes/{id}` con perfil (objeto, no lista); email repetido → 409 (RN-02)
   - `POST /clientes/{id}/perfil` → segundo perfil 409 (RN-09, C-03 de los casos); cliente inexistente → 404/409 según convención FK

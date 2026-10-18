@@ -1,0 +1,125 @@
+### Create cliente - success (201)
+POST http://localhost:8000/clientes/
+Content-Type: application/json
+
+{
+  "nombre": "Juan Pérez",
+  "email": "juan.perez@example.com"
+}
+
+### Create cliente - duplicate email (409)
+POST http://localhost:8000/clientes/
+Content-Type: application/json
+
+{
+  "nombre": "Juan Pérez",
+  "email": "juan.perez@example.com"
+}
+
+### Create cliente - invalid email (422)
+POST http://localhost:8000/clientes/
+Content-Type: application/json
+
+{
+  "nombre": "María González",
+  "email": "email-invalido"
+}
+
+### Create cliente - missing nombre (422)
+POST http://localhost:8000/clientes/
+Content-Type: application/json
+
+{
+  "email": "maria.gonzalez@example.com"
+}
+
+### List clientes - default pagination (200)
+GET http://localhost:8000/clientes/
+
+### List clientes - custom pagination (200)
+GET http://localhost:8000/clientes/?limit=5&offset=0
+
+### List clientes - invalid limit (422)
+GET http://localhost:8000/clientes/?limit=101
+
+### List clientes - invalid offset (422)
+GET http://localhost:8000/clientes/?offset=-1
+
+### Get cliente by id - with perfil (200)
+GET http://localhost:8000/clientes/1
+
+### Get cliente by id - without perfil (200)
+GET http://localhost:8000/clientes/2
+
+### Get cliente by id - not found (404)
+GET http://localhost:8000/clientes/999
+
+### Update cliente - nombre only (200)
+PATCH http://localhost:8000/clientes/1
+Content-Type: application/json
+
+{
+  "nombre": "Juan Carlos Pérez"
+}
+
+### Update cliente - email to existing (409)
+# First create another cliente
+POST http://localhost:8000/clientes/
+Content-Type: application/json
+
+{
+  "nombre": "Pedro López",
+  "email": "pedro.lopez@example.com"
+}
+
+# Then try to update cliente 1 to pedro's email
+PATCH http://localhost:8000/clientes/1
+Content-Type: application/json
+
+{
+  "email": "pedro.lopez@example.com"
+}
+
+### Update cliente - not found (404)
+PATCH http://localhost:8000/clientes/999
+Content-Type: application/json
+
+{
+  "nombre": "No Existe"
+}
+
+### Create perfil for cliente - success (201)
+POST http://localhost:8000/clientes/1/perfil
+Content-Type: application/json
+
+{
+  "telefono": "+54 11 1234-5678",
+  "direccion": "Av. Corrientes 1234, CABA"
+}
+
+### Create perfil for cliente - duplicate perfil (409)
+POST http://localhost:8000/clientes/1/perfil
+Content-Type: application/json
+
+{
+  "telefono": "+54 11 9999-9999",
+  "direccion": "Otra dirección"
+}
+
+### Create perfil for cliente - not found (404)
+POST http://localhost:8000/clientes/999/perfil
+Content-Type: application/json
+
+{
+  "telefono": "+54 11 1234-5678",
+  "direccion": "Dirección inexistente"
+}
+
+### Get ventas by cliente - success (200)
+GET http://localhost:8000/clientes/1/ventas
+
+### Get ventas by cliente - empty list (200)
+GET http://localhost:8000/clientes/2/ventas
+
+### Get ventas by cliente - not found (404)
+GET http://localhost:8000/clientes/999/ventas
