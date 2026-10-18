@@ -56,48 +56,37 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
 
 
 def test_sqlmodel_metadata_registers_8_core_tables_without_genero() -> None:
-    """Scenario: SQLModel.metadata registra las 8 tablas core sin genero ni libro.genero_id."""
+    """Scenario: SQLModel.metadata registra las 8 tablas core iniciales."""
     registered_tables = set(SQLModel.metadata.tables.keys())
     assert EXPECTED_CORE_TABLES.issubset(registered_tables)
-    assert "genero" not in registered_tables
     libro_columns = set(SQLModel.metadata.tables["libro"].columns.keys())
-    assert "genero_id" not in libro_columns
     assert {"id", "isbn", "titulo", "precio", "stock", "editorial_id"}.issubset(libro_columns)
 
 
 def test_migration_001_file_exists_and_is_reviewed() -> None:
-    """Scenario: Existe la revisión 001 en migrations/versions/ con constancia de revisión manual."""
+    """Scenario: Existe la revisión 001 en migrations/versions/ sin genero y con constancia de revisión manual."""
     versions_dir = Path(__file__).resolve().parent.parent / "migrations" / "versions"
-    migration_files = list(versions_dir.glob("*.py"))
-    assert len(migration_files) >= 1, "Debe existir al menos la migración 001 en migrations/versions/"
+    migration_files = sorted(f for f in versions_dir.glob("*.py") if "001" in f.name)
+    assert len(migration_files) == 1, "Debe existir la migración 001 en migrations/versions/"
     content = migration_files[0].read_text(encoding="utf-8")
     assert "Revisión manual" in content or "Revision manual" in content
     for table_name in EXPECTED_CORE_TABLES:
         assert f'"{table_name}"' in content or f"'{table_name}'" in content
+    assert "create_table('genero'" not in content
 
 
 @pytest.mark.asyncio
 async def test_database_schema_has_8_core_tables_and_explicit_fk_indexes(
     db_session: AsyncSession,
 ) -> None:
-    """Scenario: Upgrade head on empty database creates the 8 core tables and explicit FK indexes."""
+    """Scenario: Upgrade head includes the 8 core tables and their explicit FK indexes."""
     result = await db_session.execute(
         text(
             "SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename != 'alembic_version'"
         )
     )
     db_tables = {row[0] for row in result.fetchall()}
-    assert db_tables == EXPECTED_CORE_TABLES
-    assert "genero" not in db_tables
-
-    col_result = await db_session.execute(
-        text(
-            "SELECT column_name FROM information_schema.columns "
-            "WHERE table_schema = 'public' AND table_name = 'libro'"
-        )
-    )
-    libro_cols = {row[0] for row in col_result.fetchall()}
-    assert "genero_id" not in libro_cols
+    assert EXPECTED_CORE_TABLES.issubset(db_tables)
 
     idx_result = await db_session.execute(
         text("SELECT indexdef FROM pg_indexes WHERE schemaname = 'public'")
@@ -105,6 +94,7 @@ async def test_database_schema_has_8_core_tables_and_explicit_fk_indexes(
     index_defs = "\n".join(row[0] for row in idx_result.fetchall())
     for fk_col in ("editorial_id", "libro_id", "autor_id", "cliente_id", "venta_id"):
         assert f"({fk_col})" in index_defs, f"Falta índice explícito para FK {fk_col}"
+
 
 
 @pytest.mark.asyncio

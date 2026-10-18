@@ -1,7 +1,7 @@
 """Modelos de persistencia del módulo libros y objeto de asociación LibroAutor."""
 
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import CheckConstraint, Column, Numeric
 from sqlmodel import Field, Relationship, SQLModel
@@ -9,6 +9,7 @@ from sqlmodel import Field, Relationship, SQLModel
 if TYPE_CHECKING:
     from app.modules.autores.models import Autor
     from app.modules.editoriales.models import Editorial
+    from app.modules.generos.models import Genero
     from app.modules.ventas.models import RenglonVenta
 
 
@@ -44,7 +45,7 @@ class LibroAutor(SQLModel, table=True):
 
 
 class Libro(SQLModel, table=True):
-    """Entidad libro del catálogo (sin genero_id en C-02; se agrega en C-03)."""
+    """Entidad libro del catálogo con agregación opcional hacia Genero."""
 
     __tablename__ = "libro"
     __table_args__ = (
@@ -62,7 +63,14 @@ class Libro(SQLModel, table=True):
         index=True,
         nullable=False,
     )
+    genero_id: int | None = Field(
+        default=None,
+        foreign_key="genero.id",
+        index=True,
+        nullable=True,
+    )
 
     editorial: "Editorial" = Relationship(back_populates="libros")
+    genero: Optional["Genero"] = Relationship(back_populates="libros")
     autorias: list[LibroAutor] = Relationship(back_populates="libro")
     renglones_venta: list["RenglonVenta"] = Relationship(back_populates="libro")

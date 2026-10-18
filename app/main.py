@@ -13,6 +13,7 @@ from app.modules.clientes import models as _clientes_models  # noqa: F401
 from app.modules.clientes.router import router as clientes_router
 from app.modules.editoriales import models as _editoriales_models  # noqa: F401
 from app.modules.editoriales.router import router as editoriales_router
+from app.modules.generos import models as _generos_models  # noqa: F401
 from app.modules.generos.router import router as generos_router
 from app.modules.health.router import router as health_router
 from app.modules.libros import models as _libros_models  # noqa: F401

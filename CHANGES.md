@@ -132,7 +132,7 @@ Paso │ Agente A (Catálogo)            │ Agente B (Clientes/Ventas)       �
 > C-03 desbloquea C-04. C-05 (FASE 2) corre en paralelo con C-03 desde GATE 2.
 
 ### [C-03] `generos-migracion-002`
-- **Estado**: `[ ]` pendiente
+- **Estado**: `[x]` completado
 - **Scope**: Entidad `genero` + segunda migración (cierra US-040)
   - Modelo `Genero` (`nombre` UNIQUE) + `Libro.genero_id` nullable (FK con índice, agregación opcional)
   - Endpoints: CRUD paginado de géneros (201/404/409/422, PATCH `exclude_unset`) + `GET /generos/{id}/libros` paginado (RN-10: `limit` 1–100/def. 20, `offset >= 0` → 422 si se viola)
