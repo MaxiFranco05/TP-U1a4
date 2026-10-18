@@ -1,0 +1,24 @@
+# Comodidad exclusiva de desarrollo local (PA-04) — no forma parte de los artefactos evaluados de la entrega.
+# Expone PostgreSQL 16 en el puerto 5433 del host para no colisionar con instancias locales en 5432.
+services:
+  db:
+    image: postgres:16
+    container_name: tp_libreria_pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: libreria
+      POSTGRES_PASSWORD: libreria_dev_local
+      POSTGRES_DB: libreria
+    ports:
+      - "5433:5432"
+    volumes:
+      - pg16_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U libreria -d libreria"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+volumes:
+  pg16_data:

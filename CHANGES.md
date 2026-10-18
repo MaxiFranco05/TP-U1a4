@@ -89,7 +89,7 @@ Paso │ Agente A (Catálogo)            │ Agente B (Clientes/Ventas)       �
 > C-01 y C-02 son estrictamente secuenciales. Al cerrar la fase se sugiere el segundo commit del proyecto.
 
 ### [C-01] `foundation-setup`
-- **Estado**: `[ ]` pendiente
+- **Estado**: `[x]` completado
 - **Scope**: Scaffolding completo + infraestructura base (sin modelos de dominio)
   - Estructura: `app/main.py` (app, `lifespan` crea motor async + fábrica de sesiones en `app.state`, cierra motor al apagar), `app/core/config.py` (`DATABASE_URL` desde entorno), `app/core/database.py` (motor SQLAlchemy 2.0 async + asyncpg, `get_session` con `Depends()`, `expire_on_commit=False`), esqueleto `app/modules/health/` y carpetas de los 7 módulos
   - `GET /health/live` → `{"estado": "vivo"}` 200 sin tocar la base; `GET /health/ready` → `SELECT 1`, falla si la base no responde (RN-12: sin traza interna)

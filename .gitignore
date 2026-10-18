@@ -1,0 +1,20 @@
+# Entorno virtual
+.venv/
+venv/
+ENV/
+
+# Variables de entorno locales (no versionar secretos)
+.env
+.env.*
+!.env.example
+
+# Caché de Python y tests
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Herramientas locales
+.atl/
