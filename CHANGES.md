@@ -109,7 +109,7 @@ Paso │ Agente A (Catálogo)            │ Agente B (Clientes/Ventas)       �
 ---
 
 ### [C-02] `core-models-migracion-001`
-- **Estado**: `[ ]` pendiente
+- **Estado**: `[x]` completado
 - **Scope**: Modelos del dominio (todo menos `genero`, que llega en C-03) + primera migración
   - Modelos: `Editorial`, `Autor`, `Libro` (**sin** `genero_id` todavía), `LibroAutor` (objeto de asociación: PK (`libro_id`, `autor_id`), `rol` en (autor, coautor, traductor, ilustrador), `orden >= 1`, navegación `libro.autorias[i].autor`), `Cliente`, `PerfilCliente`, `Venta`, `RenglonVenta`
   - Dinero siempre `Decimal` (NUMERIC 10,2 / 12,2); CHECK `precio > 0`, `stock >= 0`, `cantidad > 0`, `precio_unitario > 0`, `total >= 0`; UNIQUE `isbn`, `email`, `editorial.nombre`, `perfil_cliente.cliente_id`; `Cliente.perfil` devuelve objeto (no lista)

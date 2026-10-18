@@ -8,6 +8,11 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from sqlmodel import SQLModel
 
 from app.core.config import get_settings
+from app.modules.autores import models as _autores_models  # noqa: F401
+from app.modules.clientes import models as _clientes_models  # noqa: F401
+from app.modules.editoriales import models as _editoriales_models  # noqa: F401
+from app.modules.libros import models as _libros_models  # noqa: F401
+from app.modules.ventas import models as _ventas_models  # noqa: F401
 
 config = context.config
 
