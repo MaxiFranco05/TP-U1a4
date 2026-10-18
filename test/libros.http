@@ -1,0 +1,217 @@
+### Prerequisites: Create editorial, autor, genero first
+
+### Create editorial for libro tests (201)
+POST http://localhost:8000/editoriales/
+Content-Type: application/json
+
+{
+  "nombre": "Editorial Test",
+  "pais": "Argentina"
+}
+
+### Create autor for libro tests (201)
+POST http://localhost:8000/autores/
+Content-Type: application/json
+
+{
+  "nombre": "Autor Test",
+  "nacionalidad": "Argentina"
+}
+
+### Create genero for libro tests (201)
+POST http://localhost:8000/generos/
+Content-Type: application/json
+
+{
+  "nombre": "Ficción"
+}
+
+### Create libro with authors - success (201)
+POST http://localhost:8000/libros/
+Content-Type: application/json
+
+{
+  "isbn": "978-987-1234-56-7",
+  "titulo": "El Libro de Prueba",
+  "precio": "29.99",
+  "stock": 10,
+  "editorial_id": 1,
+  "genero_id": 1,
+  "autores": [
+    {
+      "autor_id": 1,
+      "rol": "autor",
+      "orden": 1
+    }
+  ]
+}
+
+### Create libro - duplicate ISBN (409)
+POST http://localhost:8000/libros/
+Content-Type: application/json
+
+{
+  "isbn": "978-987-1234-56-7",
+  "titulo": "Otro Libro",
+  "precio": "19.99",
+  "stock": 5,
+  "editorial_id": 1,
+  "genero_id": 1,
+  "autores": [
+    {
+      "autor_id": 1,
+      "rol": "autor",
+      "orden": 1
+    }
+  ]
+}
+
+### Create libro - non-existent editorial_id (409)
+POST http://localhost:8000/libros/
+Content-Type: application/json
+
+{
+  "isbn": "978-987-1234-56-8",
+  "titulo": "Libro Editorial Inexistente",
+  "precio": "19.99",
+  "stock": 5,
+  "editorial_id": 999,
+  "genero_id": 1,
+  "autores": [
+    {
+      "autor_id": 1,
+      "rol": "autor",
+      "orden": 1
+    }
+  ]
+}
+
+### Create libro - non-existent autor_id (409)
+POST http://localhost:8000/libros/
+Content-Type: application/json
+
+{
+  "isbn": "978-987-1234-56-9",
+  "titulo": "Libro Autor Inexistente",
+  "precio": "19.99",
+  "stock": 5,
+  "editorial_id": 1,
+  "genero_id": 1,
+  "autores": [
+    {
+      "autor_id": 999,
+      "rol": "autor",
+      "orden": 1
+    }
+  ]
+}
+
+### Create libro - invalid precio (422)
+POST http://localhost:8000/libros/
+Content-Type: application/json
+
+{
+  "isbn": "978-987-1234-57-0",
+  "titulo": "Libro Precio Inválido",
+  "precio": "-10.00",
+  "stock": 5,
+  "editorial_id": 1,
+  "genero_id": 1,
+  "autores": [
+    {
+      "autor_id": 1,
+      "rol": "autor",
+      "orden": 1
+    }
+  ]
+}
+
+### Create libro - invalid stock (422)
+POST http://localhost:8000/libros/
+Content-Type: application/json
+
+{
+  "isbn": "978-987-1234-57-1",
+  "titulo": "Libro Stock Inválido",
+  "precio": "19.99",
+  "stock": -1,
+  "editorial_id": 1,
+  "genero_id": 1,
+  "autores": [
+    {
+      "autor_id": 1,
+      "rol": "autor",
+      "orden": 1
+    }
+  ]
+}
+
+### Create libro - invalid rol (422)
+POST http://localhost:8000/libros/
+Content-Type: application/json
+
+{
+  "isbn": "978-987-1234-57-2",
+  "titulo": "Libro Rol Inválido",
+  "precio": "19.99",
+  "stock": 5,
+  "editorial_id": 1,
+  "genero_id": 1,
+  "autores": [
+    {
+      "autor_id": 1,
+      "rol": "editor",
+      "orden": 1
+    }
+  ]
+}
+
+### Create libro - invalid orden (422)
+POST http://localhost:8000/libros/
+Content-Type: application/json
+
+{
+  "isbn": "978-987-1234-57-3",
+  "titulo": "Libro Orden Inválido",
+  "precio": "19.99",
+  "stock": 5,
+  "editorial_id": 1,
+  "genero_id": 1,
+  "autores": [
+    {
+      "autor_id": 1,
+      "rol": "autor",
+      "orden": 0
+    }
+  ]
+}
+
+### List libros - default pagination (200)
+GET http://localhost:8000/libros/
+
+### List libros - custom pagination (200)
+GET http://localhost:8000/libros/?limit=5&offset=0
+
+### List libros - filter by titulo (200)
+GET http://localhost:8000/libros/?titulo=prueba
+
+### List libros - filter by genero_id (200)
+GET http://localhost:8000/libros/?genero_id=1
+
+### List libros - combined filters (200)
+GET http://localhost:8000/libros/?titulo=libro&genero_id=1&limit=10
+
+### List libros - invalid pagination limit (422)
+GET http://localhost:8000/libros/?limit=101
+
+### List libros - invalid pagination offset (422)
+GET http://localhost:8000/libros/?offset=-1
+
+### Get libro by id - success (200)
+GET http://localhost:8000/libros/1
+
+### Get libro by id - not found (404)
+GET http://localhost:8000/libros/999
+
+### SQL Injection test - title filter with bound parameter (should return empty list, not error)
+GET http://localhost:8000/libros/?titulo=' OR '1'='1

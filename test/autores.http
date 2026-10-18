@@ -1,0 +1,36 @@
+### Create autor - success (201)
+POST http://localhost:8000/autores/
+Content-Type: application/json
+
+{
+  "nombre": "Gabriel García Márquez",
+  "nacionalidad": "Colombiana"
+}
+
+### Get autor by id - success (200)
+GET http://localhost:8000/autores/1
+
+### Get autor by id - not found (404)
+GET http://localhost:8000/autores/999
+
+### Update autor - success (200)
+PATCH http://localhost:8000/autores/1
+Content-Type: application/json
+
+{
+  "nacionalidad": "Colombiana/Mexicana"
+}
+
+### Update autor - not found (404)
+PATCH http://localhost:8000/autores/999
+Content-Type: application/json
+
+{
+  "nombre": "Inexistente"
+}
+
+### Get libros by autor - success (200)
+GET http://localhost:8000/autores/1/libros
+
+### Get libros by autor - not found (404)
+GET http://localhost:8000/autores/999/libros

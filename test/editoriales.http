@@ -1,0 +1,65 @@
+### Create editorial - success (201)
+POST http://localhost:8000/editoriales/
+Content-Type: application/json
+
+{
+  "nombre": "Editorial Planeta",
+  "pais": "España"
+}
+
+### Create editorial - duplicate name (409)
+POST http://localhost:8000/editoriales/
+Content-Type: application/json
+
+{
+  "nombre": "Editorial Planeta",
+  "pais": "Argentina"
+}
+
+### List editoriales - default pagination (200)
+GET http://localhost:8000/editoriales/
+
+### List editoriales - custom pagination (200)
+GET http://localhost:8000/editoriales/?limit=5&offset=0
+
+### List editoriales - invalid limit (422)
+GET http://localhost:8000/editoriales/?limit=101
+
+### List editoriales - invalid offset (422)
+GET http://localhost:8000/editoriales/?offset=-1
+
+### Get editorial by id - success (200)
+GET http://localhost:8000/editoriales/1
+
+### Get editorial by id - not found (404)
+GET http://localhost:8000/editoriales/999
+
+### Update editorial - success (200)
+PATCH http://localhost:8000/editoriales/1
+Content-Type: application/json
+
+{
+  "pais": "España (actualizado)"
+}
+
+### Update editorial - duplicate name (409)
+POST http://localhost:8000/editoriales/
+Content-Type: application/json
+
+{
+  "nombre": "Editorial Sudamericana",
+  "pais": "Argentina"
+}
+
+PATCH http://localhost:8000/editoriales/1
+Content-Type: application/json
+
+{
+  "nombre": "Editorial Sudamericana"
+}
+
+### Get libros by editorial - success (200)
+GET http://localhost:8000/editoriales/1/libros
+
+### Get libros by editorial - not found (404)
+GET http://localhost:8000/editoriales/999/libros

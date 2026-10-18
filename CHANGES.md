@@ -150,7 +150,7 @@ Paso │ Agente A (Catálogo)            │ Agente B (Clientes/Ventas)       �
 ---
 
 ### [C-04] `catalogo-crud`
-- **Estado**: `[ ]` pendiente
+- **Estado**: `[x]` completado
 - **Scope**: CRUD de catálogo + alta de libro con autorías + consultas con filtro (US-010 a US-013)
   - CRUD paginado de editoriales (+ `GET /editoriales/{id}/libros`) y autores (+ `GET /autores/{id}/libros` exponiendo `rol` y `orden`); PATCH parcial con `exclude_unset`
   - `POST /libros/` con `{editorial_id, genero_id, autores: [{autor_id, rol, orden}]}` → 201 con detalle completo (editorial, género, autores vía `libro.autorias[i].autor`); editorial/autor inexistente → 409 **sin `if` previo** (la base rechaza la FK); ISBN repetido → 409; cuerpo inválido → 422
