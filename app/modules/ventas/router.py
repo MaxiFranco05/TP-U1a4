@@ -6,7 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Path, status
 
 from app.core.database import SessionDep
 from app.core.pagination import PaginationParams, get_pagination_params
-from app.modules.ventas.schemas import VentaCreate, VentaRead
+from app.modules.ventas.schemas import VentaCreate, VentaListItem, VentaRead
 from app.modules.ventas.service import crear_venta, listar_ventas, obtener_venta
 
 router = APIRouter(prefix="/ventas", tags=["ventas"])
@@ -41,10 +41,10 @@ async def get_venta(
     return venta
 
 
-@router.get("/", response_model=list[VentaRead])
+@router.get("/", response_model=list[VentaListItem])
 async def get_ventas(
     session: SessionDep,
     pagination: PaginationParams = Depends(get_pagination_params),
-) -> list[VentaRead]:
+) -> list[VentaListItem]:
     """Lista ventas de forma paginada (RN-10)."""
     return await listar_ventas(session, pagination)

@@ -10,11 +10,13 @@ from app.modules.libros.schemas import (
     LibroCreate,
     LibroListItem,
     LibroRead,
+    LibroUpdate,
 )
 from app.modules.libros.service import (
     create_libro_with_autores,
     get_libro,
     list_libros,
+    update_libro,
 )
 
 router = APIRouter(prefix="/libros", tags=["libros"])
@@ -57,3 +59,13 @@ async def get_libro_by_id(
 ) -> LibroRead:
     """Obtiene el detalle completo de un libro con relaciones eager-loaded."""
     return await get_libro(session, libro_id)
+
+
+@router.patch("/{libro_id}", response_model=LibroRead, status_code=status.HTTP_200_OK)
+async def patch_libro(
+    libro_id: LibroIdPath,
+    payload: LibroUpdate,
+    session: SessionDep,
+) -> LibroRead:
+    """Actualiza parcialmente un libro existente (RN-12, DD-04)."""
+    return await update_libro(session, libro_id, payload)

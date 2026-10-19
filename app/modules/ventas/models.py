@@ -68,3 +68,12 @@ class RenglonVenta(SQLModel, table=True):
 
     venta: Venta = Relationship(back_populates="renglones")
     libro: "Libro" = Relationship(back_populates="renglones_venta")
+
+    @property
+    def titulo(self) -> str:
+        return self.libro.titulo if self.libro else ""
+
+    @property
+    def subtotal(self) -> Decimal:
+        return Decimal(str(self.cantidad)) * self.precio_unitario
+

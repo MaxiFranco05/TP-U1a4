@@ -39,23 +39,31 @@ class VentaCreate(SQLModel):
         return self
 
 
-class RenglonVentaRead(SQLModel):
-    """DTO de salida para un renglón de venta."""
+class ClienteVentaRead(SQLModel):
+    """DTO simplificado del cliente dentro del detalle de venta (PDF pág. 9)."""
 
     id: int
-    venta_id: int
+    nombre: str
+    email: str
+
+
+class RenglonVentaRead(SQLModel):
+    """DTO de salida para un renglón de venta (PDF pág. 9)."""
+
     libro_id: int
+    titulo: str
     cantidad: int
     precio_unitario: Decimal
+    subtotal: Decimal
 
 
 class VentaRead(SQLModel):
-    """DTO de salida para una venta con sus renglones."""
+    """DTO de salida para una venta con cliente y renglones detallados (PDF pág. 9)."""
 
     id: int
-    cliente_id: int
     fecha: datetime
     total: Decimal
+    cliente: ClienteVentaRead
     renglones: list[RenglonVentaRead] = []
 
 

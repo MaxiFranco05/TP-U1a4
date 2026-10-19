@@ -18,6 +18,7 @@ from app.modules.libros.schemas import (
     LibroCreate,
     LibroListItem,
     LibroRead,
+    LibroUpdate,
     EditorialRead,
     GeneroRead,
 )
@@ -125,6 +126,55 @@ async def get_libro(
         )
 
     return _libro_to_read(libro)
+
+
+async def update_libro(
+    session: AsyncSession,
+    libro_id: int,
+    payload: LibroUpdate,
+) -> LibroRead:
+    """Actualiza parcialmente un libro existente (RN-12, DD-04)."""
+    stmt = (
+        select(Libro)
+        .where(Libro.id == libro_id)
+        .options(
+            joinedload(Libro.editorial),
+            joinedload(Libro.genero),
+            selectinload(Libro.autorias).joinedload(LibroAutor.autor),
+        )
+    )
+    result = await session.execute(stmt)
+    libro = result.unique().scalar_one_or_none()
+
+    if libro is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Libro no encontrado",
+        )
+
+    update_data = payload.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(libro, field, value)
+
+    try:
+        session.add(libro)
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise translate_integrity_error(exc) from exc
+
+    stmt_reload = (
+        select(Libro)
+        .where(Libro.id == libro_id)
+        .options(
+            joinedload(Libro.editorial),
+            joinedload(Libro.genero),
+            selectinload(Libro.autorias).joinedload(LibroAutor.autor),
+        )
+    )
+    res_reload = await session.execute(stmt_reload)
+    libro_updated = res_reload.unique().scalar_one()
+    return _libro_to_read(libro_updated)
 
 
 def _libro_to_read(libro: Libro) -> LibroRead:

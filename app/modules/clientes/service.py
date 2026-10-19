@@ -16,7 +16,7 @@ from app.modules.clientes.schemas import (
     PerfilClienteCreate,
     PerfilClienteRead,
 )
-from app.modules.ventas.models import Venta
+from app.modules.ventas.models import RenglonVenta, Venta
 from app.modules.ventas.schemas import VentaRead
 
 
@@ -138,7 +138,8 @@ async def obtener_ventas_cliente(
         select(Venta)
         .where(Venta.cliente_id == cliente_id)
         .options(
-            selectinload(Venta.renglones).selectinload(Venta.renglones.property.mapper.class_.libro)
+            joinedload(Venta.cliente),
+            selectinload(Venta.renglones).joinedload(RenglonVenta.libro),
         )
         .order_by(Venta.fecha.desc())
     )

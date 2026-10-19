@@ -50,6 +50,27 @@ class LibroCreate(SQLModel):
         return cleaned
 
 
+class LibroUpdate(SQLModel):
+    """DTO de entrada para la actualización parcial de un libro."""
+
+    isbn: str | None = None
+    titulo: str | None = None
+    precio: Decimal | None = Field(default=None, gt=0, description="Precio debe ser positivo")
+    stock: int | None = Field(default=None, ge=0, description="Stock no puede ser negativo")
+    editorial_id: int | None = Field(default=None, ge=1)
+    genero_id: int | None = Field(default=None, ge=1)
+
+    @field_validator("titulo")
+    @classmethod
+    def validate_titulo(cls, value: str | None) -> str | None:
+        if value is not None:
+            cleaned = value.strip()
+            if not cleaned:
+                raise ValueError("El título no puede estar vacío")
+            return cleaned
+        return value
+
+
 class LibroRead(SQLModel):
     """DTO de salida para detalle completo de un libro."""
 

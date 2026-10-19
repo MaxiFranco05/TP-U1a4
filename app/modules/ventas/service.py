@@ -108,7 +108,7 @@ async def crear_venta(
         .where(Venta.id == venta.id)
         .options(
             joinedload(Venta.cliente),
-            selectinload(Venta.renglones).selectinload(RenglonVenta.libro),
+            selectinload(Venta.renglones).joinedload(RenglonVenta.libro),
         )
     )
     result = await session.execute(stmt)
@@ -128,7 +128,7 @@ async def obtener_venta(session: AsyncSession, venta_id: int) -> VentaRead | Non
         .where(Venta.id == venta_id)
         .options(
             joinedload(Venta.cliente),
-            selectinload(Venta.renglones).selectinload(RenglonVenta.libro),
+            selectinload(Venta.renglones).joinedload(RenglonVenta.libro),
         )
     )
     result = await session.execute(stmt)
