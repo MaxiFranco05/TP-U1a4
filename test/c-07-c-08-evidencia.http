@@ -1,0 +1,178 @@
+### C-07 y C-08: Evidencias de lecturas sin N+1 y seed de entrega
+
+> Para estas pruebas poner `SQL_ECHO=true` en el .env para ver las consultas en consola.
+> Luego correr: `alembic upgrade head` y luego `python seed_db.py`
+> Base: postgresql+asyncpg://user:password@localhost:5433/libreria
+
+# ---- C-07: Lecturas sin N+1 - Eager loading declarado ----
+
+# Configurar SQL_ECHO=true para ver las consultas
+# GET /ventas/ paginado con cliente cargado (joinedload) - sin renglones en listado (US-031)
+GET http://localhost:8000/ventas/
+
+### C-07: Verificar que GET /ventas/{id} carga cliente y renglones con eager loading fijo
+# Usando joinedload para cliente (relación to-one) y selectinload para renglones+libro (colección)
+GET http://localhost:8000/ventas/1
+
+### C-07: Verificar estrategia de carga en GET /libros/{id}
+# Usa joinedload editorial, genero y selectinload autorías (DD-05, cero lazy loading)
+GET http://localhost:8000/libros/1
+
+### C-07: Filtro de título con parámetro ligado - inyección SQL segura (C-08)
+# Debe retornar 200 con lista vacía, nunca error 500 (evita ' OR '1'='1)
+GET http://localhost:8000/libros/?titulo=' OR '1'='1
+
+### C-07: Evidencia de número fijo de queries
+# Con SQL_ECHO=true, verificar que la cantidad de queries es la misma con 1 autor que con N autores
+# Expected: misma cantidad de queries independientemente de la cantidad de datos
+
+# ---- C-08: Seed reproducible y suite final ----
+
+### Preparación: Base vacía + migraciones
+# Asegurarse de tener SQL_ECHO=false en .env antes de estas pruebas
+
+### 1. Ejecutar seed manual o que el script se encargue:
+# - 3 editoriales, 3 géneros, 4 autores
+# - 5 libros con autorías asociadas
+# - 1 cliente con perfil único
+# - 1 venta de ejemplo con 2 renglones
+
+### 2. Verificar C-01: Health checks
+GET http://localhost:8000/health/live
+### Expected: 200 {"estado": "vivo"}
+
+GET http://localhost:8000/health/ready
+### Expected: 200 {"estado": "listo"} (SELECT 1 contra DB)
+
+### 3. Verificar C-02: Constraints y unicidad
+# ISBN repetido → 409
+POST http://localhost:8000/libros/
+Content-Type: application/json
+
+{
+  "isbn": "978-950-12-3456-7",
+  "titulo": "Libro Duplicate ISBN Test",
+  "precio": "19.99",
+  "stock": 5,
+  "editorial_id": 1,
+  "genero_id": 1,
+  "autores": [
+    {
+      "autor_id": 1,
+      "rol": "autor",
+      "orden": 1
+    }
+  ]
+}
+### Expected: 409 (ISBN único)
+
+# Email cliente repetido → 409 (RN-02)
+POST http://localhost:8000/clientes/
+Content-Type: application/json
+
+{
+  "nombre": "Otro Cliente",
+  "email": "maria.garcia@test.com"
+}
+### Expected: 409 (email único)
+
+### 4. Verificar C-03: CRUD géneros (si están cargados)
+GET http://localhost:8000/generos/
+
+### 5. Verificar C-04: CRUD catálogo y libros
+# Listado de libros con filtros
+GET http://localhost:8000/libros/?titulo=El Aleph
+
+# Filtro case-insensitive (RN-11) con parámetro ligado → 200 lista vacía si no hay match
+GET http://localhost:8000/libros/?titulo=nonexistent title
+
+### 6. Verificar C-05: Clientes y perfil único
+# Crear segundo perfil para mismo cliente → 409 (RN-09, C-03 de los casos)
+POST http://localhost:8000/clientes/1/perfil
+Content-Type: application/json
+
+{
+  "telefono": "+54 9 11 8765-4321",
+  "direccion": "Otra dirección"
+}
+### Expected: 409 (máximo un perfil por cliente)
+
+### 7. Verificar C-06: Alta de venta con renglones
+# Venta feliz path con 2 renglones
+POST http://localhost:8000/ventas/
+Content-Type: application/json
+
+{
+  "cliente_id": 1,
+  "renglones": [
+    {
+      "libro_id": 1,
+      "cantidad": 2
+    },
+    {
+      "libro_id": 2,
+      "cantidad": 1
+    }
+  ]
+}
+### Expected: 201 con total calculado correctamente
+
+# Venta con renglones vacíos → 422
+POST http://localhost:8000/ventas/
+Content-Type: application/json
+
+{
+  "cliente_id": 1,
+  "renglones": []
+}
+### Expected: 422 (al menos un renglón)
+
+# Venta con libro inexistente → 409
+POST http://localhost:8000/ventas/
+Content-Type: application/json
+
+{
+  "cliente_id": 1,
+  "renglones": [
+    {
+      "libro_id": 99999,
+      "cantidad": 1
+    }
+  ]
+}
+### Expected: 409 (libro no existe)
+
+# Venta con cliente inexistente → 409
+POST http://localhost:8000/ventas/
+Content-Type: application/json
+
+{
+  "cliente_id": 99999,
+  "renglones": [
+    {
+      "libro_id": 1,
+      "cantidad": 1
+    }
+  ]
+}
+### Expected: 409 (cliente no existe)
+
+### 8. Verificar C-07: Lecturas sin N+1 (evidencia en consola)
+# Con SQL_ECHO=true, correr las siguientes y verificar misma cantidad de queries:
+# - GET /ventas/1 (una venta con 2 renglones)
+# - GET /libros/1 (un libro con autorías)
+
+### 9. Verificar C-08: Seed reproducible - flujo punta a punta
+# Desde base vacía:
+# 1. alembic upgrade head
+# 2. python seed_db.py
+# 3. Ejecutar todos los .http de arriba y verificar que están en verde
+
+# Verificar README tiene documentación final
+# El README.md debe contener:
+# - Pasos desde cero
+# - Evidencia C-07 (consultas SQL con SQL_ECHO=true)
+# - Decisión PA-02 (VPS/Easypanel fuera de corrección)
+# - Nota PA-04 (compose.yaml solo dev)
+
+GET http://localhost:8000/

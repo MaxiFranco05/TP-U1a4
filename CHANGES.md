@@ -218,7 +218,7 @@ Paso │ Agente A (Catálogo)            │ Agente B (Clientes/Ventas)       �
 > C-07 deja la evidencia de consultas fijas; C-08 cierra con seed + `.http` + README. Commit final sugerido al terminar C-08.
 
 ### [C-07] `lecturas-sin-nplusuno`
-- **Estado**: `[ ]` pendiente
+- **Estado**: `[x]` completado
 - **Scope**: Eager loading declarado + consultas de ventas + evidencia C-07 (US-013 detalle, US-031)
   - Una sola consulta con carga anticipada por tipo: `joinedload` para relaciones a uno (editorial, género, cliente), `selectinload` para colecciones (autorías, renglones); cero lazy loading; número de queries fijo aunque crezcan autores/renglones
   - `GET /ventas/` paginado + `GET /ventas/{id}` con cliente y renglones; `GET /libros/{id}` ya creado en C-04 se endurece aquí con la estrategia de carga
@@ -236,7 +236,7 @@ Paso │ Agente A (Catálogo)            │ Agente B (Clientes/Ventas)       �
 ---
 
 ### [C-08] `seed-entrega-evidencia`
-- **Estado**: `[ ]` pendiente
+- **Estado**: `[x]` completado
 - **Scope**: Seed reproducible + suite `.http` + README final (US-040, US-041 — cierre entregable)
   - Script/comando de seed con estado conocido: editoriales, géneros, autores, libros con autorías, un cliente con perfil y una venta de ejemplo (PA-03: fijar contenido exacto para que los `.http` sean reproducibles)
   - `test/*.http` con C-01 a C-08 comentados (casos mínimos de la consigna); `requirements.txt` y `env.example` finales; verificación de punta a punta desde cero: base vacía → `alembic upgrade head` → seed → `.http` en verde; sin credenciales en el repo (bloqueante)

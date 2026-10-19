@@ -79,8 +79,16 @@ async def list_libros(
     titulo: Optional[str] = None,
     genero_id: Optional[int] = None,
 ) -> List[LibroListItem]:
-    """Lista libros paginados con filtros opcionales (RN-10, RN-11)."""
-    stmt = select(Libro).order_by(Libro.id)
+    """Lista libros paginados con filtros opcionales (RN-10, RN-11) y carga anticipada."""
+    stmt = (
+        select(Libro)
+        .options(
+            joinedload(Libro.editorial),
+            joinedload(Libro.genero),
+            selectinload(Libro.autorias).joinedload(LibroAutor.autor),
+        )
+        .order_by(Libro.id)
+    )
 
     if titulo:
         stmt = stmt.where(Libro.titulo.ilike(f"%{titulo}%"))
