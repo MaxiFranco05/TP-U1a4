@@ -1,1 +1,249 @@
-﻿{"discovery":{"casos_de_uso":["Ej.1 proyecto/conexión/lifespan y healthchecks","Ej.2 modelos/restricciones/relaciones","Ej.3 migraciones Alembic (2 autogeneradas)","Ej.4 contratos y CRUD (201/404/409/422, paginación)","Ej.5 altas con relaciones (libros y ventas)","Ej.6 lecturas sin N+1","Ej.7 asincronía sin bloqueos + BackgroundTasks","C-01 a C-08 casos de prueba mínimos"],"competitors":[],"created_by":"discovery-research","funcionalidades_necesarias":["Endpoints de referencia (health, editoriales, generos, autores, libros, clientes, ventas)","RN-01 a RN-12","Estructura obligatoria por módulo","migrations/ Alembic, test/*.http, requirements.txt, env.example, README.md, seed, evidencia C-07"],"funcionalidades_opcionales":["Ninguna: alcance exacto a consigna; auth (cap.5), UoW (cap.6) y Redis (caps.7-8) explícitamente fuera"],"integraciones":["Ninguna externa; solo PostgreSQL 16 vía DATABASE_URL y BackgroundTasks simulado"],"preguntas_abiertas":["¿PostgreSQL 16 en Docker local o expuesto desde Easypanel?","¿Instalar Python 3.12 en paralelo con la 3.14 existente?","¿VPS con Easypanel como deploy de muestra documentado o fuera de la entrega?"],"problema":"Librería de barrio necesita API para catálogo y ventas; a nivel académico, integrar caps 1-4 (FastAPI async, CRUD, persistencia relacional) en un único proyecto","reglas_de_negocio":["RN-01 ISBN único (409)","RN-02 email cliente único (409)","RN-03 precio \u003e 0 y stock \u003e= 0","RN-04 venta se crea con sus renglones (DTO anidado)","RN-05 venta con \u003e= 1 renglón y sin libros repetidos (422)","RN-06 precio del renglón lo copia el servidor (no viaja en DTO)","RN-07 total calculado por el servidor (no viaja en DTO)","RN-08 ventas no se modifican (sin PATCH)","RN-09 máximo un perfil por cliente (409)","RN-10 paginación limit 1-100/def.20 y offset \u003e= 0 (422)","RN-11 filtro libros por título case-insensitive con parámetros ligados","RN-12 errores sin texto interno de la base"],"restricciones":["Stack fijo: Python 3.12, FastAPI\u003e=0.111, SQLModel\u003e=0.0.24, SQLAlchemy 2.0 async, asyncpg\u003e=0.30, PostgreSQL 16, Alembic\u003e=1.13 async","Nombres de tablas/columnas obligatorios (usan los casos de prueba)","Estructura de proyecto obligatoria por módulo","Entrega: repo + requirements.txt + env.example + migrations/ + test/ + README.md; .env no se sube","Corrección bloqueante si no levanta, si alembic upgrade head falla en base vacía o si hay credenciales","Entorno: Windows, Docker 29.7 OK, Python 3.14 instalado (falta 3.12), sin servidor PG16 aún"],"riesgos":["Alta de ventas con renglones (RN-04 a RN-07): parte menos dominada","Python 3.14 vs 3.12 exigido: instalar 3.12 en paralelo","Sin servidor PostgreSQL 16 aún: definir PG16 en Docker local","Desvíos en nombres/estructura rompen la corrección automática","Agregados fuera de consigna no suman (mitigado: alcance exacto)"],"sources":["TP_Cap1a4_Consigna.pdf"],"usuarios":["Alumno (desarrolla y entrega)","Docente/corrector (migra base vacía y corre casos de prueba)","Librería como dominio ficticio (sin roles de negocio, sin auth)"]},"kb":{"created_by":"kb-creator","discovery":{"domain":"libreria","needs_infra":true,"problem":"Librería de barrio necesita API para catálogo y ventas; a nivel académico, integrar caps 1-4 (FastAPI async, CRUD, persistencia relacional) en un único proyecto","scale":"single_user","stack":"Python 3.12 + FastAPI + SQLModel + PostgreSQL 16 + Alembic","system_type":"api"},"files":["knowledge-base/01_vision_y_objetivos.md","knowledge-base/02_descripcion_general.md","knowledge-base/03_actores_y_roles.md","knowledge-base/04_modelo_de_datos.md","knowledge-base/05_reglas_de_negocio.md","knowledge-base/06_funcionalidades.md","knowledge-base/07_flujos_principales.md","knowledge-base/08_arquitectura_propuesta.md","knowledge-base/09_decisiones_y_supuestos.md","knowledge-base/10_preguntas_abiertas.md","knowledge-base/README.md"],"source":"interactive"},"owner":"active-orchestrator","step":"done","version":4,"agents":{"created_by":"agent-instruction","files":["AGENTS.md","CLAUDE.md"],"reglas_applied":["no-commit-autonomo","no-texto-base-en-errores","no-verificar-con-if","no-float-dinero","no-lazy-loading","no-create-all","no-renombrar-modelo","no-bloqueos-async","no-sql-concatenado","no-secretos-repo"]},"roadmap":{"created_by":"roadmap-generator","source":"CHANGES.md","changes":["C-01","C-02","C-03","C-04","C-05","C-06","C-07","C-08"]},"skills":{"recommended":[{"skill":"fastapi/fastapi@fastapi","repo":"fastapi/fastapi","installs":"12.3K","why":"Official FastAPI skill; matches core stack (async lifespan, CRUD, 201/404/409/422 contracts, pagination)"},{"skill":"wshobson/agents@fastapi-templates","repo":"wshobson/agents","installs":"25.4K","why":"FastAPI endpoint/module templates; matches obligatory per-module structure and CRUD contracts (Ej.4)"},{"skill":"mindrally/skills@fastapi-python","repo":"mindrally/skills","installs":"13.7K","why":"FastAPI+Python patterns; matches catalog/ventas endpoints with nested DTOs (RN-04..RN-07)"},{"skill":"affaan-m/ecc@fastapi-patterns","repo":"affaan-m/ecc","installs":"6.7K","why":"FastAPI patterns incl. async/BackgroundTasks; matches Ej.7 non-blocking async requirement"},{"skill":"jeffallan/claude-skills@fastapi-expert","repo":"jeffallan/claude-skills","installs":"5.9K","why":"FastAPI expert guidance; matches validation/error-shape rules (RN-10/RN-12, 422 without DB internals)"},{"skill":"supabase/agent-skills@supabase-postgres-best-practices","repo":"supabase/agent-skills","installs":"444.8K","why":"Postgres best practices (official Supabase); matches PG16 modeling, unique constraints RN-01/RN-02/RN-09, bound params RN-11"},{"skill":"wshobson/agents@postgresql-table-design","repo":"wshobson/agents","installs":"27.2K","why":"Postgres table/relationship design; matches Ej.2 modelos/restricciones/relaciones + precio/stock checks RN-03"},{"skill":"github/awesome-copilot@postgresql-optimization","repo":"github/awesome-copilot","installs":"16.2K","why":"Postgres query optimization; matches Ej.6 lecturas sin N+1 (selectin/eager loading)"},{"skill":"wispbit-ai/skills@sqlalchemy-alembic-expert-best-practices-code-review","repo":"wispbit-ai/skills","installs":"1.9K","why":"SQLAlchemy+Alembic expert review; matches Ej.3 two autogenerated migrations (SQLModel is SQLAlchemy-based)"},{"skill":"wshobson/agents@python-testing-patterns","repo":"wshobson/agents","installs":"35.6K","why":"Python/pytest patterns; matches C-01..C-08 minimum test cases and test/*.http evidence"}],"installed":[{"skill":"fastapi/fastapi@fastapi","location":"project", "path":".agents/skills/fastapi"},{"skill":"wshobson/agents@fastapi-templates","location":"project", "path":".agents/skills/fastapi-templates"},{"skill":"mindrally/skills@fastapi-python","location":"project", "path":".agents/skills/fastapi-python"},{"skill":"supabase/agent-skills@supabase-postgres-best-practices","location":"project", "path":".agents/skills/supabase-postgres-best-practices"},{"skill":"wshobson/agents@postgresql-table-design","location":"project", "path":".agents/skills/postgresql-table-design"},{"skill":"github/awesome-copilot@postgresql-optimization","location":"project", "path":".agents/skills/postgresql-optimization"},{"skill":"wispbit-ai/skills@sqlalchemy-alembic-expert-best-practices-code-review","location":"project", "path":".agents/skills/sqlalchemy-alembic-expert-best-practices-code-review"}]},"registry":{"location":".atl/skill-registry.md","updated":"2026-10-15","skills":["fastapi","fastapi-templates","fastapi-python","supabase-postgres-best-practices","postgresql-table-design","postgresql-optimization","sqlalchemy-alembic-expert-best-practices-code-review"],"conventions":[],"engram":"saved"}}
+{
+  "discovery": {
+    "casos_de_uso": [
+      "Ej. 1 (6%): Proyecto, configuración (pydantic-settings, @computed_field DATABASE_URL, sin secretos por defecto) y ciclo de vida (lifespan con motor, pool, sesiones, hash ficticio en app.state, dos grupos de rutas, /health/ready 503)",
+      "Ej. 2 (10%): Modelos nuevos (usuario, asignacion_rol, intento_acceso, evento_seguridad, movimiento_stock), cambios en cliente y libro (borrado lógico + índices únicos parciales postgresql_where) y migraciones Alembic 003 (autogenerada) y 004 (manual trigger append-only)",
+      "Ej. 3 (8%): Contratos con extra='forbid', sin password_hash en salida, PATCH exclude_unset, baja 204 y envoltorio paginado {items, total, page, size, pages}",
+      "Ej. 4 (14%): Autenticación con bcrypt fuera del bucle (to_thread) y semáforo, límite 72 bytes UTF-8, orden del login (429 Retry-After, hash ficticio, sesión propia en intento_acceso), JWT en cookie HttpOnly",
+      "Ej. 5 (12%): Autorización 401 vs 403, roles vigentes en BD por petición, autoprotección ADMIN, dos grupos de rutas para cambio obligatorio de clave, autorización de dueño (/mis-ventas y /ventas/{id})",
+      "Ej. 6 (16%): BaseRepository[T] y SoftDeleteRepository[T] (flush sin commit, precarga en repositorio), UnitOfWork por módulo sin cerrar sesión, sesión compartida entre auth y UoW, punto único de escritura de stock",
+      "Ej. 7 (10%): Integridad sólo-agregado por trigger en movimiento_stock e intento_acceso en sesión/transacción propia con comentario obligatorio de 3 puntos",
+      "Ej. 8 (6%): Lecturas sin N+1 (incluso con libros dados de baja en ventas viejas) y BackgroundTasks visible en consola normal de uvicorn",
+      "Ej. 9 (11%): Contenedor Docker del TP 1-4 en despliegue/ (python:3.12-alpine <100MB, --no-cache-dir, USER no-root, sin secretos, alembic upgrade head al arrancar, HEALTHCHECK 127.0.0.1)",
+      "Ej. 10 (7%): Despliegue del TP 1-4 en el VPS con docker run, DEPLOY.md y evidencias C-01..C-16 y D-01..D-08"
+    ],
+    "competitors": [],
+    "created_by": "discovery-research",
+    "funcionalidades_necesarias": [
+      "Endpoints de referencia en grupo abierto y grupo protegido (health, auth, usuarios, eventos, editoriales, generos, autores, libros, clientes, ventas)",
+      "Reglas de negocio RN-01 a RN-16 del Parcial",
+      "Arquitectura obligatoria en 5 capas: Router -> Service -> UoW -> Repository -> Model",
+      "seed.py canónico, test/*.http (C-01 a C-16), test/solo_agregado.sql (C-14), evidencia/ y carpeta despliegue/ (Dockerfile, .dockerignore, DEPLOY.md, evidencia/ D-01 a D-08)"
+    ],
+    "funcionalidades_opcionales": [
+      "Ninguna: alcance exacto a consigna; concurrencia/bloqueo pesimista (cap. 7) y colas Redis (cap. 8) explícitamente fuera"
+    ],
+    "integraciones": [
+      "PostgreSQL 16 (local en dev y en el servidor VPS para despliegue/)",
+      "BackgroundTasks simulado con asyncio.sleep(0.5) y registro visible en consola de uvicorn"
+    ],
+    "preguntas_abiertas": [
+      "PA-05 (Resuelta): División equitativa de C-09 a C-17 entre Maxi (C-09..C-11), Andrés (C-12..C-14) y Octavio (C-15..C-17)",
+      "PA-06: Confirmar puerto y host de PostgreSQL en el VPS de la cátedra al ejecutar el despliegue en C-17"
+    ],
+    "problema": "Evolucionar el TP de la librería (capítulos 1 a 4) al Parcial (capítulos 1 a 6): agregar control de acceso con usuarios y roles vigentes en BD, transacciones con Repositorios y Unit of Work, stock de sólo-agregado, borrado lógico de libros y desplegar el TP 1-4 en un contenedor Docker en el VPS",
+    "reglas_de_negocio": [
+      "RN-01 Unicidad de email (usuario/cliente), nombre (editorial/genero) e ISBN entre libros vigentes (WHERE borrado_en IS NULL) -> 409",
+      "RN-02 Auto-registro crea Usuario + AsignacionRol(CLIENTE) + Cliente en un solo UoW -> 409 si correo ya existe sin apropiarse de la ficha",
+      "RN-03 A lo sumo una asignación abierta por rol (índice único parcial WHERE revocada_en IS NULL) -> 409",
+      "RN-04 Permisos decididos con roles vigentes en la base en cada petición (roles del token son informativos) -> 403",
+      "RN-05 Autoprotección: un ADMIN no se revoca su propio ADMIN y el sistema nunca queda sin administradores vigentes -> 409",
+      "RN-06 Mientras debe_cambiar_password sea True, sólo puede usar /auth y rutas sin sesión (dos grupos de rutas) -> 403",
+      "RN-07 Tras 5 intentos fallidos con mismo correo e IP en 60s desde el último éxito, login responde 429 con Retry-After sin verificar contraseña",
+      "RN-08 Login responde lo mismo y tarda lo mismo exista o no el correo (verificación contra hash ficticio de app.state)",
+      "RN-09 Venta nace con sus renglones (>=1, sin repetidos), precio copiado del libro y total calculado por el servidor; sin PATCH",
+      "RN-10 Registrar venta descuenta stock y deja un movimiento por renglón en un solo UoW; si un libro no alcanza, no queda ninguna escritura -> 409",
+      "RN-11 El stock sólo cambia por movimientos (alta con stock_inicial, reposición y venta) a través de un único punto de escritura; no se edita por PATCH",
+      "RN-12 movimiento_stock es de sólo agregado: disparador PostgreSQL en migración 004 rechaza UPDATE y DELETE",
+      "RN-13 Libro dado de baja desaparece del catálogo y no se vende ni repone (409), pero ventas viejas lo siguen mostrando",
+      "RN-14 Lo propio sólo pide estar autenticado: un cliente ve sus ventas (/mis-ventas y comprobación de dueño en /ventas/{id}) -> 403",
+      "RN-15 Ningún error devuelve texto interno de la base ni traza; ninguna entrada inválida termina en 500",
+      "RN-16 Cada alta de personal, cambio de rol y cambio de contraseña deja una línea en evento_seguridad en el mismo UoW"
+    ],
+    "restricciones": [
+      "Stack fijo: Python 3.12, FastAPI>=0.111, SQLModel>=0.0.24, SQLAlchemy 2.0 async, asyncpg>=0.30, PostgreSQL 16, Alembic>=1.13 async, pydantic-settings>=2.0, bcrypt>=4.0, PyJWT>=2.8, Docker>=20.10",
+      "Nombres de tablas, columnas y rutas obligatorios",
+      "Formato de entrega en .zip con dos carpetas: parcial/ y despliegue/"
+    ],
+    "riesgos": [
+      "Unificación de sesión entre dependencias de auth y Unit of Work para no tomar dos conexiones del pool",
+      "Sesión propia independiente para intento_acceso para sobrevivir al rollback del login fallido",
+      "Mantener invariante libro.stock == SUM(movimiento_stock.cantidad) mediante punto único de escritura",
+      "Configuración de HEALTHCHECK en Alpine (usar 127.0.0.1 en vez de localhost por resolución IPv6 de wget)"
+    ],
+    "sources": [
+      "docs/TP_Cap1a4_Consigna.pdf",
+      "docs/Parcial_Cap1a6_Consigna.pdf"
+    ],
+    "usuarios": [
+      "Equipo de alumnos (Maxi, Andrés, Octavio)",
+      "Docente/corrector",
+      "Visitante público, Cliente (CLIENTE), Vendedor (VENDEDOR), Administrador (ADMIN) y actor SISTEMA"
+    ]
+  },
+  "kb": {
+    "created_by": "kb-creator",
+    "discovery": {
+      "domain": "libreria",
+      "needs_infra": true,
+      "problem": "API asincrónica de librería con acceso (bcrypt + JWT cookie + RBAC en BD), transacciones (Repositorios + UoW + stock append-only) y despliegue Docker en VPS",
+      "scale": "multi_role",
+      "stack": "Python 3.12 + FastAPI + SQLModel + PostgreSQL 16 + Alembic + pydantic-settings + bcrypt + PyJWT + Docker",
+      "system_type": "api"
+    },
+    "files": [
+      "knowledge-base/01_vision_y_objetivos.md",
+      "knowledge-base/02_descripcion_general.md",
+      "knowledge-base/03_actores_y_roles.md",
+      "knowledge-base/04_modelo_de_datos.md",
+      "knowledge-base/05_reglas_de_negocio.md",
+      "knowledge-base/06_funcionalidades.md",
+      "knowledge-base/07_flujos_principales.md",
+      "knowledge-base/08_arquitectura_propuesta.md",
+      "knowledge-base/09_decisiones_y_supuestos.md",
+      "knowledge-base/10_preguntas_abiertas.md",
+      "knowledge-base/README.md"
+    ],
+    "source": "docs/Parcial_Cap1a6_Consigna.pdf"
+  },
+  "owner": "active-orchestrator",
+  "step": "done",
+  "version": 5,
+  "agents": {
+    "created_by": "agent-instruction",
+    "files": [
+      "AGENTS.md",
+      "CLAUDE.md"
+    ],
+    "reglas_applied": [
+      "no-commit-autonomo",
+      "no-secretos-por-defecto",
+      "lifespan-motor-y-hash-ficticio",
+      "no-commit-en-repositorio",
+      "uow-creado-en-router-abierto-en-service",
+      "sesion-compartida-auth-uow",
+      "bcrypt-to-thread-semaforo-fuera-transaccion",
+      "jwt-solo-cookie-httponly",
+      "roles-vigentes-en-bd",
+      "punto-unico-escritura-stock",
+      "movimiento-stock-solo-agregado",
+      "extra-forbid-y-sin-password-hash",
+      "no-texto-base-en-errores",
+      "no-verificar-con-if",
+      "no-float-dinero-ni-lazy-loading",
+      "no-create-all-ni-renombrar-modelo",
+      "no-sql-concatenado"
+    ]
+  },
+  "roadmap": {
+    "created_by": "roadmap-generator",
+    "source": "CHANGES.md",
+    "changes": [
+      "C-01",
+      "C-02",
+      "C-03",
+      "C-04",
+      "C-05",
+      "C-06",
+      "C-07",
+      "C-08",
+      "C-09",
+      "C-10",
+      "C-11",
+      "C-12",
+      "C-13",
+      "C-14",
+      "C-15",
+      "C-16",
+      "C-17"
+    ]
+  },
+  "skills": {
+    "recommended": [
+      {
+        "skill": "fastapi/fastapi@fastapi",
+        "repo": "fastapi/fastapi",
+        "installs": "12.3K",
+        "why": "Official FastAPI skill; matches core stack (async lifespan, CRUD, 201/204/401/403/404/409/422/429/503 contracts, pagination)"
+      },
+      {
+        "skill": "wshobson/agents@fastapi-templates",
+        "repo": "wshobson/agents",
+        "installs": "25.4K",
+        "why": "FastAPI endpoint/module templates; matches obligatory 5-layer structure (Router -> Service -> UoW -> Repository -> Model)"
+      },
+      {
+        "skill": "mindrally/skills@fastapi-python",
+        "repo": "mindrally/skills",
+        "installs": "13.7K",
+        "why": "FastAPI+Python patterns; matches auth dependencies, UoW transactions and nested DTOs"
+      },
+      {
+        "skill": "supabase/agent-skills@supabase-postgres-best-practices",
+        "repo": "supabase/agent-skills",
+        "installs": "444.8K",
+        "why": "Postgres best practices; matches PG16 partial unique indexes, triggers and bound params"
+      },
+      {
+        "skill": "wshobson/agents@postgresql-table-design",
+        "repo": "wshobson/agents",
+        "installs": "27.2K",
+        "why": "Postgres table/relationship design; matches 14-table model, partial unique indexes and append-only trigger"
+      },
+      {
+        "skill": "github/awesome-copilot@postgresql-optimization",
+        "repo": "github/awesome-copilot",
+        "installs": "16.2K",
+        "why": "Postgres query optimization; matches Ej. 8 lecturas sin N+1"
+      },
+      {
+        "skill": "wispbit-ai/skills@sqlalchemy-alembic-expert-best-practices-code-review",
+        "repo": "wispbit-ai/skills",
+        "installs": "1.9K",
+        "why": "SQLAlchemy+Alembic expert review; matches migrations 003 (autogenerate) and 004 (manual trigger)"
+      }
+    ],
+    "installed": [
+      {
+        "skill": "fastapi/fastapi@fastapi",
+        "location": "project",
+        "path": ".agents/skills/fastapi"
+      },
+      {
+        "skill": "wshobson/agents@fastapi-templates",
+        "location": "project",
+        "path": ".agents/skills/fastapi-templates"
+      },
+      {
+        "skill": "mindrally/skills@fastapi-python",
+        "location": "project",
+        "path": ".agents/skills/fastapi-python"
+      },
+      {
+        "skill": "supabase/agent-skills@supabase-postgres-best-practices",
+        "location": "project",
+        "path": ".agents/skills/supabase-postgres-best-practices"
+      },
+      {
+        "skill": "wshobson/agents@postgresql-table-design",
+        "location": "project",
+        "path": ".agents/skills/postgresql-table-design"
+      },
+      {
+        "skill": "github/awesome-copilot@postgresql-optimization",
+        "location": "project",
+        "path": ".agents/skills/postgresql-optimization"
+      },
+      {
+        "skill": "wispbit-ai/skills@sqlalchemy-alembic-expert-best-practices-code-review",
+        "location": "project",
+        "path": ".agents/skills/sqlalchemy-alembic-expert-best-practices-code-review"
+      }
+    ]
+  },
+  "registry": {
+    "location": ".atl/skill-registry.md",
+    "updated": "2026-11-03",
+    "skills": [
+      "fastapi",
+      "fastapi-templates",
+      "fastapi-python",
+      "supabase-postgres-best-practices",
+      "postgresql-table-design",
+      "postgresql-optimization",
+      "sqlalchemy-alembic-expert-best-practices-code-review"
+    ],
+    "conventions": [],
+    "engram": "saved"
+  }
+}
