@@ -42,10 +42,12 @@ C-08 [x]
               │     └── C-13 auth-registro-login-y-cambio-password [x]   [Bloque 2: Andrés]
               │           ├── C-14 usuarios-roles-vigencia-y-eventos [x]   [Bloque 2: Andrés]
               │           │
-              │           └── C-15 catalogo-uow-borrado-logico-y-stock [Bloque 3: Octavio]
+              │           └── C-15 catalogo-uow-borrado-logico-y-stock [x]   [Bloque 3: Octavio]
               │                 └── C-16 clientes-y-ventas-uow-stock-y-autorizacion [Bloque 3: Octavio]
               │                       └── C-17 seed-casos-prueba-y-despliegue-docker [Bloque 3: Octavio]
 ```
+
+> **Nota sobre C-07 y C-08**: se implementaron de forma directa en los commits `a4daf97` (C-07 y C-08) y `b25d49a` (evidencia de pytest), sin pasar por OpenSpec; por eso no tienen carpeta en `openspec/changes/archive/`.
 
 ### Paralelismo por fase (Etapa 1 TP + Etapa 2 Parcial)
 
@@ -451,7 +453,7 @@ Paso │ Maxi (Bloque 1: Base y Datos)        │ Andrés (Bloque 2: Auth y Role
 
 ### [C-15] `catalogo-uow-borrado-logico-y-stock`
 - **Responsable**: **Octavio** (Bloque 3 — Change 1/3)
-- **Estado**: `[ ]` pendiente
+- **Estado**: `[x]` completado
 - **Scope**: Refactor de `editoriales`, `generos`, `autores` y `libros` a `Repository` + `UnitOfWork`, paginación con envoltorio, borrado lógico y punto único de stock (Ej. 3, Ej. 6, Ej. 8)
   - En `editoriales`, `generos`, `autores` y `libros`:
     - Crear `repository.py` y `unit_of_work.py` en cada módulo; los routers construyen el UoW por dependencia y lo pasan al servicio sin abrirlo; el servicio lo abre con `async with uow:` y deja de recibir la sesión.
@@ -478,7 +480,7 @@ Paso │ Maxi (Bloque 1: Base y Datos)        │ Andrés (Bloque 2: Auth y Role
 
 ### [C-16] `clientes-y-ventas-uow-stock-y-autorizacion`
 - **Responsable**: **Octavio** (Bloque 3 — Change 2/3)
-- **Estado**: `[ ]` pendiente
+- **Estado**: [ ] pendiente
 - **Scope**: Refactor de `clientes` y `ventas` a `Repository` + `UnitOfWork`, venta atómica con descuento de stock y movimientos, autorización de dueño y consultas sin N+1 (Ej. 5 RN-14, Ej. 6 RN-10/RN-11, Ej. 8)
   - En `app/modules/clientes/`:
     - `repository.py` (`ClienteRepository`, `PerfilClienteRepository` con precarga de `perfil` y `usuario` declarada en el repositorio) y `unit_of_work.py` (`ClientesUnitOfWork`).
@@ -509,7 +511,7 @@ Paso │ Maxi (Bloque 1: Base y Datos)        │ Andrés (Bloque 2: Auth y Role
 
 ### [C-17] `seed-casos-prueba-y-despliegue-docker`
 - **Responsable**: **Octavio** (Bloque 3 — Change 3/3)
-- **Estado**: `[ ]` pendiente
+- **Estado**: [ ] pendiente
 - **Scope**: `seed.py` del Parcial, suite de pruebas `C-01` a `C-16`, e imagen Docker + despliegue en el VPS en carpeta `despliegue/` (Ej. 9 — 11% y Ej. 10 — 7%)
   - **Parte A — Cierre de `parcial/` (raíz del proyecto)**:
     - `seed.py` en la raíz: vacía las tablas y carga los datos iniciales exactos de la consigna:
