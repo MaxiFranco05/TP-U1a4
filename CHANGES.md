@@ -339,7 +339,7 @@ Paso │ Maxi (Bloque 1: Base y Datos)        │ Andrés (Bloque 2: Auth y Role
 
 ### [C-11] `core-repositories-uow-y-paginacion`
 - **Responsable**: **Maxi** (Bloque 1 — Change 3/3)
-- **Estado**: `[ ]` pendiente
+- **Estado**: `[x]` completado
 - **Scope**: Clases base `BaseRepository[T]`, `SoftDeleteRepository[T]`, `UnitOfWork` y envoltorio de paginación (Ej. 3 paginación y Ej. 6 base)
   - `app/core/repository.py`:
     - `BaseRepository[T]`: recibe en su constructor `session: AsyncSession` y `model_cls: type[T]`. Ofrece `get_by_id`, `get_all`, `count`, `add`, `update` y `delete`. `add` y `update` ejecutan `await self.session.flush()`, **nunca `commit()`**.
