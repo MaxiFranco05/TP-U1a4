@@ -9,7 +9,7 @@ from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
     from app.modules.clientes.models import Cliente
-    from app.modules.libros.models import Libro
+    from app.modules.libros.models import Libro, MovimientoStock
 
 
 class Venta(SQLModel, table=True):
@@ -38,6 +38,7 @@ class Venta(SQLModel, table=True):
 
     cliente: "Cliente" = Relationship(back_populates="ventas")
     renglones: list["RenglonVenta"] = Relationship(back_populates="venta")
+    movimientos_stock: list["MovimientoStock"] = Relationship(back_populates="venta")
 
 
 class RenglonVenta(SQLModel, table=True):
@@ -76,4 +77,3 @@ class RenglonVenta(SQLModel, table=True):
     @property
     def subtotal(self) -> Decimal:
         return Decimal(str(self.cantidad)) * self.precio_unitario
-

@@ -98,7 +98,7 @@ async def test_database_schema_at_head_has_all_9_tables_and_genero_fk_index(
         )
     )
     db_tables = {row[0] for row in result.fetchall()}
-    assert db_tables == EXPECTED_ALL_9_TABLES
+    assert EXPECTED_ALL_9_TABLES.issubset(db_tables)
 
     col_result = await db_session.execute(
         text(

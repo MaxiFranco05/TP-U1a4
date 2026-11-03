@@ -1,10 +1,9 @@
-"""Traducción de errores de integridad a mensajes controlados (RN-12)."""
-
-from sqlalchemy.exc import IntegrityError
-from fastapi import HTTPException, status
-
+"""Traducción de errores de integridad a mensajes controlados (RN-12, RN-15)."""
 
 import re
+
+from fastapi import HTTPException, status
+from sqlalchemy.exc import IntegrityError
 
 
 def _extract_constraint_name(exc: IntegrityError) -> str | None:
@@ -68,19 +67,34 @@ def translate_integrity_error(exc: IntegrityError) -> HTTPException:
             "editorial_nombre_key": "Ya existe una editorial con ese nombre",
             "autor_nombre_key": "Ya existe un autor con ese nombre",
             "libro_isbn_key": "Ya existe un libro con ese ISBN",
+            "uq_libro_isbn_activo": "Ya existe un libro con ese ISBN",
             "genero_nombre_key": "Ya existe un género con ese nombre",
             "cliente_email_key": "Email ya registrado",
+            "usuario_email_key": "Email ya registrado",
+            "ix_usuario_email": "Email ya registrado",
+            "uq_asignacion_rol_activa": "El usuario ya tiene ese rol asignado",
+            "ix_cliente_usuario_id": "El usuario ya está asociado a un cliente",
+            "cliente_usuario_id_key": "El usuario ya está asociado a un cliente",
             "ix_perfil_cliente_cliente_id": "El cliente ya tiene un perfil",
             "fk_libro_editorial": "La editorial referenciada no existe",
             "libro_editorial_id_fkey": "La editorial referenciada no existe",
             "fk_libro_genero": "El género referenciado no existe",
-            "fk_libro_genero_id_genero": "El género referenciado no existe",
+            "fk_libro_genero_id_genero": "El género referenciada no existe"
+            if False
+            else "El género referenciado no existe",
             "fk_libro_autor_libro": "El libro referenciado no existe",
             "fk_libro_autor_autor": "El autor referenciado no existe",
             "fk_renglon_venta_venta": "La venta referenciada no existe",
             "fk_renglon_venta_libro": "El libro referenciado no existe",
             "venta_cliente_id_fkey": "Cliente no encontrado",
             "perfil_cliente_cliente_id_fkey": "Cliente no encontrado",
+            "fk_cliente_usuario_id_usuario": "El usuario referenciado no existe",
+            "cliente_usuario_id_fkey": "El usuario referenciado no existe",
+            "asignacion_rol_usuario_id_fkey": "El usuario referenciado no existe",
+            "asignacion_rol_otorgada_por_fkey": "El usuario referenciado no existe",
+            "movimiento_stock_libro_id_fkey": "El libro referenciado no existe",
+            "movimiento_stock_venta_id_fkey": "La venta referenciada no existe",
+            "movimiento_stock_usuario_id_fkey": "El usuario referenciado no existe",
         }
         detail = mapping.get(constraint_name, detail)
 

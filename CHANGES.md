@@ -311,7 +311,7 @@ Paso │ Maxi (Bloque 1: Base y Datos)        │ Andrés (Bloque 2: Auth y Role
 
 ### [C-10] `modelos-acceso-stock-y-migraciones-003-004`
 - **Responsable**: **Maxi** (Bloque 1 — Change 2/3)
-- **Estado**: `[ ]` pendiente
+- **Estado**: `[x]` completado
 - **Scope**: Nuevos modelos (`usuarios`, `movimiento_stock`), cambios en `cliente` y `libro`, y migraciones Alembic 003 y 004 (Ej. 2 — 10% y Ej. 7 trigger — 5%)
   - `app/modules/usuarios/models.py`:
     - `Usuario` (`usuario`): `id`, `email` (`UNIQUE`), `nombre`, `password_hash`, `activo` (`bool`), `debe_cambiar_password` (`bool`).
@@ -523,7 +523,7 @@ Paso │ Maxi (Bloque 1: Base y Datos)        │ Andrés (Bloque 2: Auth y Role
     - Carpeta `evidencia/` con la captura/salida de `psql` de `C-14` y el fragmento de consola de `C-15` (consultas fijas en detalle de venta con 2 y 4 renglones).
     - `README.md` actualizado con los nombres y apellidos de los integrantes y los pasos desde cero (`venv`, `requirements.txt`, `.env` y generación de `JWT_SECRET`, `alembic upgrade head`, `python seed.py`, arranque de `uvicorn`).
   - **Parte B — Carpeta `despliegue/` (Contenedor y Despliegue en el VPS del TP Capítulos 1 a 4)**:
-    - Copiar en `despliegue/` el TP de los capítulos 1 a 4 tal como se entregó (en estado `C-08`, sin los cambios del parcial).
+    - Extraer en `despliegue/` el TP de los capítulos 1 a 4 exactamente desde el commit **`65ae2a6aae7e637a81f7ebc1f7ef3547585f7faf`** (`fix(remediation): restore async alembic, fix seed_db, implement patch libro and venta schemas`), que contiene todas las correcciones finales del TP 1–4, sin ninguno de los cambios del parcial; e incluir un script de empaquetado (`scripts/empaquetar_entrega.py`) que arme el `.zip` final con las dos carpetas (`parcial/` y `despliegue/`) sin `.venv`, `__pycache__` ni `.env`.
     - `despliegue/Dockerfile`:
       - Parte de `python:3.12-alpine` (imagen base < 100 MB, `D-01`).
       - Copia e instala `requirements.txt` con `pip install --no-cache-dir` antes de copiar el código.

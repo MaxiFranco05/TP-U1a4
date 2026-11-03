@@ -5,18 +5,30 @@ from typing import TYPE_CHECKING, Optional
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
+    from app.modules.usuarios.models import Usuario
     from app.modules.ventas.models import Venta
 
 
 class Cliente(SQLModel, table=True):
-    """Entidad cliente con relación 1 a 0..1 hacia PerfilCliente y 1 a * hacia Venta."""
+    """Entidad cliente con relación 1 a 0..1 hacia PerfilCliente y Usuario, y 1 a * hacia Venta."""
 
     __tablename__ = "cliente"
 
     id: int | None = Field(default=None, primary_key=True)
     nombre: str = Field(nullable=False)
     email: str = Field(unique=True, nullable=False)
+    usuario_id: int | None = Field(
+        default=None,
+        foreign_key="usuario.id",
+        unique=True,
+        index=True,
+        nullable=True,
+    )
 
+    usuario: Optional["Usuario"] = Relationship(
+        back_populates="cliente",
+        sa_relationship_kwargs={"uselist": False},
+    )
     perfil: Optional["PerfilCliente"] = Relationship(
         back_populates="cliente",
         sa_relationship_kwargs={"uselist": False},
