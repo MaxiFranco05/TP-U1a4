@@ -7,13 +7,19 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import get_settings
 from app.core.exceptions import translate_integrity_error
+from app.core.paginacion import PaginatedResponse, PaginationParams, paginate
 from app.core.security import create_access_token, decode_access_token, hash_password, verify_password
 from app.modules.clientes.models import Cliente
 from app.modules.usuarios.models import AsignacionRol, IntentoAcceso, Usuario
 from app.modules.usuarios.schemas import (
     CambiarPasswordRequest,
+    EventoSeguridadResponse,
     LoginRequest,
     LoginResponse,
+    RolAsignacionResponse,
+    RolAsignarRequest,
+    UsuarioCreateRequest,
+    UsuarioReadResponse,
     UsuarioRegistroRequest,
     UsuarioYoResponse,
 )
@@ -218,3 +224,206 @@ class AuthService:
                 actor=usuario.email,
                 accion="CAMBIO_PASSWORD",
             )
+
+
+class UsuarioService:
+    """Lógica de negocio para gestión de personal, roles con vigencia y auditoría (/usuarios, /eventos)."""
+
+    async def crear_personal(
+        self,
+        admin_actor: Usuario,
+        datos: UsuarioCreateRequest,
+        uow: UsuariosUnitOfWork,
+    ) -> Usuario:
+        """Crea un usuario de personal con contraseña provisoria, rol inicial y auditoría (RN-06, RN-16).
+
+        1. Calcula el hash bcrypt fuera del UoW en asyncio.to_thread bajo semáforo (DD-10).
+        2. Dentro de async with uow:
+           - Crea Usuario con debe_cambiar_password=True y activo=True.
+           - Crea AsignacionRol inicial con otorgada_por=admin_actor.id.
+           - Registra EventoSeguridad con acción 'ALTA_PERSONAL'.
+        3. Traduce colisión de email duplicado a 409 Conflict.
+        """
+        hashed_password = await hash_password(datos.password)
+
+        try:
+            async with uow:
+                usuario = Usuario(
+                    nombre=datos.nombre,
+                    email=str(datos.email),
+                    password_hash=hashed_password,
+                    activo=True,
+                    debe_cambiar_password=True,
+                )
+                await uow.usuarios.add(usuario)
+
+                rol = AsignacionRol(
+                    usuario_id=usuario.id,
+                    rol=datos.rol.upper(),
+                    otorgada_por=admin_actor.id,
+                    desde=datetime.now(timezone.utc),
+                )
+                await uow.asignaciones_rol.add(rol)
+
+                await uow.eventos_seguridad.registrar_evento(
+                    actor=admin_actor.email,
+                    accion="ALTA_PERSONAL",
+                )
+
+        except IntegrityError as exc:
+            translated = translate_integrity_error(exc)
+            if translated.detail == "Error de integridad de la base de datos":
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="El correo electrónico ya está registrado",
+                ) from exc
+            raise translated from exc
+
+        return usuario
+
+    async def listar_roles(
+        self,
+        usuario_id: int,
+        uow: UsuariosUnitOfWork,
+    ) -> list[AsignacionRol]:
+        """Devuelve el historial completo de asignaciones de un usuario (404 si no existe)."""
+        usuario = await uow.usuarios.get_by_id(usuario_id)
+        if usuario is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Usuario no encontrado",
+            )
+        return await uow.asignaciones_rol.get_asignaciones_usuario(usuario_id)
+
+    async def asignar_rol(
+        self,
+        admin_actor: Usuario,
+        usuario_id: int,
+        datos: RolAsignarRequest,
+        uow: UsuariosUnitOfWork,
+    ) -> AsignacionRol:
+        """Asigna un rol con vigencia, reemplazando asignaciones previas vencidas (RN-03, RN-16, C-07)."""
+        usuario = await uow.usuarios.get_by_id(usuario_id)
+        if usuario is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Usuario no encontrado",
+            )
+
+        now = datetime.now(timezone.utc)
+        rol_nombre = datos.rol.upper()
+
+        async with uow:
+            asig_abierta = await uow.asignaciones_rol.get_asignacion_abierta_por_rol(
+                usuario_id=usuario_id,
+                rol=rol_nombre,
+            )
+            if asig_abierta is not None:
+                vence_en = asig_abierta.vence_en
+                if vence_en is not None and vence_en.tzinfo is None:
+                    vence_en = vence_en.replace(tzinfo=timezone.utc)
+
+                if vence_en is not None and vence_en <= now:
+                    asig_abierta.revocada_en = now
+                    await uow.asignaciones_rol.update(asig_abierta)
+                    await uow.session.flush()
+                else:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="El usuario ya tiene ese rol asignado",
+                    )
+
+
+            nueva_asig = AsignacionRol(
+                usuario_id=usuario_id,
+                rol=rol_nombre,
+                otorgada_por=admin_actor.id,
+                desde=now,
+                vence_en=datos.vence_en,
+            )
+            await uow.asignaciones_rol.add(nueva_asig)
+
+            await uow.eventos_seguridad.registrar_evento(
+                actor=admin_actor.email,
+                accion="ASIGNACION_ROL",
+            )
+
+        return nueva_asig
+
+    async def revocar_rol(
+        self,
+        admin_actor: Usuario,
+        usuario_id: int,
+        rol: str,
+        uow: UsuariosUnitOfWork,
+    ) -> AsignacionRol:
+        """Revoca lógicamente un rol de un usuario con autoprotección de administrador (RN-05, RN-16, C-08).
+
+        Directiva de comprobaciones en orden:
+        1. Verificar existencia del usuario destino (404 si no existe).
+        2. Buscar la asignación activa (revocada_en IS NULL y sin vencer) para (usuario_id, rol) (404 si no la posee).
+        3. Si rol.upper() == 'ADMIN':
+           - Si usuario_id == admin_actor.id: rechazar 409 (intento de auto-revocación).
+           - Si contar_admins_vigentes() <= 1: rechazar 409 (último administrador restante).
+        4. Proceder a la revocación lógica (revocada_en = now()) y registro en evento_seguridad.
+        """
+        usuario = await uow.usuarios.get_by_id(usuario_id)
+        if usuario is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Usuario no encontrado",
+            )
+
+        rol_nombre = rol.upper()
+        asig_activa = await uow.asignaciones_rol.get_asignacion_activa_por_rol(
+            usuario_id=usuario_id,
+            rol=rol_nombre,
+        )
+        if asig_activa is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"El usuario no posee el rol '{rol_nombre}' activo",
+            )
+
+        if rol_nombre == "ADMIN":
+            if usuario_id == admin_actor.id:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="No es posible auto-revocarse el rol de administrador",
+                )
+
+            total_admins = await uow.asignaciones_rol.contar_admins_vigentes()
+            if total_admins <= 1:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="No es posible revocar al único administrador vigente del sistema",
+                )
+
+        now = datetime.now(timezone.utc)
+        async with uow:
+            asig_activa.revocada_en = now
+            await uow.asignaciones_rol.update(asig_activa)
+
+            await uow.eventos_seguridad.registrar_evento(
+                actor=admin_actor.email,
+                accion="REVOCACION_ROL",
+            )
+
+        return asig_activa
+
+    async def listar_eventos(
+        self,
+        params: PaginationParams,
+        uow: UsuariosUnitOfWork,
+    ) -> PaginatedResponse[EventoSeguridadResponse]:
+        """Consulta paginada de eventos de seguridad con envoltorio estándar y validación (RN-16, C-16)."""
+        items, total = await uow.eventos_seguridad.listar_eventos_paginado(
+            offset=params.offset,
+            limit=params.limit,
+        )
+        dtos = [EventoSeguridadResponse.model_validate(e) for e in items]
+        return paginate(items=dtos, total=total, page=params.page, size=params.size)
+
+
+
+

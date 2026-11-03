@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, FastAPI
 
 from app.core.config import get_settings
 from app.core.database import build_engine, build_session_factory
-from app.core.dependencies import verificar_password_cambiada
+from app.core.dependencies import requiere_rol, verificar_password_cambiada
 from app.modules.autores import models as _autores_models  # noqa: F401
 from app.modules.autores.router import router as autores_router
 from app.modules.clientes import models as _clientes_models  # noqa: F401
@@ -20,7 +20,11 @@ from app.modules.generos import models as _generos_models  # noqa: F401
 from app.modules.generos.router import router as generos_router
 from app.modules.health.router import router as health_router
 from app.modules.usuarios import models as _usuarios_models  # noqa: F401
-from app.modules.usuarios.router import router as auth_router
+from app.modules.usuarios.router import (
+    eventos_router,
+    router as auth_router,
+    usuarios_router,
+)
 from app.modules.libros import models as _libros_models  # noqa: F401
 from app.modules.libros.router import router as libros_router
 from app.modules.ventas import models as _ventas_models  # noqa: F401
@@ -73,6 +77,17 @@ def _build_route_groups() -> tuple[APIRouter, APIRouter]:
     open_group.include_router(health_router)
     open_group.include_router(auth_router)
 
+    # Rutas protegidas de administración de usuarios y personal (exigen ADMIN y contraseña cambiada)
+    protected_group.include_router(
+        usuarios_router,
+        dependencies=[Depends(requiere_rol("ADMIN"))],
+    )
+    protected_group.include_router(
+        eventos_router,
+        dependencies=[Depends(requiere_rol("ADMIN"))],
+    )
+
+    # Rutas de catálogo y negocio
     protected_group.include_router(editoriales_router)
     protected_group.include_router(generos_router)
     protected_group.include_router(autores_router)

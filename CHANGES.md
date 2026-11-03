@@ -39,8 +39,8 @@ C-08 [x]
         └── C-11 core-repositories-uow-y-paginacion         [Bloque 1: Maxi]
               │
               ├── C-12 security-bcrypt-jwt-y-dependencies [x]   [Bloque 2: Andrés]
-              │     └── C-13 auth-registro-login-y-cambio-password [Bloque 2: Andrés]
-              │           ├── C-14 usuarios-roles-vigencia-y-eventos [Bloque 2: Andrés]
+              │     └── C-13 auth-registro-login-y-cambio-password [x]   [Bloque 2: Andrés]
+              │           ├── C-14 usuarios-roles-vigencia-y-eventos [x]   [Bloque 2: Andrés]
               │           │
               │           └── C-15 catalogo-uow-borrado-logico-y-stock [Bloque 3: Octavio]
               │                 └── C-16 clientes-y-ventas-uow-stock-y-autorizacion [Bloque 3: Octavio]
@@ -419,7 +419,7 @@ Paso │ Maxi (Bloque 1: Base y Datos)        │ Andrés (Bloque 2: Auth y Role
 
 ### [C-14] `usuarios-roles-vigencia-y-eventos`
 - **Responsable**: **Andrés** (Bloque 2 — Change 3/3)
-- **Estado**: `[ ]` pendiente
+- **Estado**: `[x]` pendiente
 - **Scope**: Administración de personal (`POST /usuarios`), asignación y revocación de roles con vigencia y autoprotección, y listado de eventos de seguridad (Ej. 5, Ej. 6 RN-16)
   - Todas las rutas de este change se montan en el **grupo protegido** y exigen `requiere_rol("ADMIN")`:
   - `POST /usuarios` (`201, 409, 422`):

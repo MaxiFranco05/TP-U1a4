@@ -53,6 +53,7 @@ class AsignacionRol(SQLModel, table=True):
             "rol",
             unique=True,
             postgresql_where=text("revocada_en IS NULL"),
+            sqlite_where=text("revocada_en IS NULL"),
         ),
     )
 
