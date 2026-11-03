@@ -7,7 +7,7 @@ import uuid
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import delete, select, text
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
@@ -38,24 +38,43 @@ EXPECTED_ALL_9_TABLES = {
 
 @pytest.fixture
 async def db_session() -> AsyncGenerator[AsyncSession, None]:
-    """Provee una sesión asincrónica conectada a PostgreSQL 16 y limpia los datos al finalizar."""
+    """Provee una sesión asincrónica conectada a PostgreSQL y limpia las tablas al finalizar."""
     settings = get_settings()
     engine = build_engine(settings.database_url, sql_echo=False)
     session_factory = build_session_factory(engine)
     async with session_factory() as session:
         yield session
         await session.rollback()
-        await session.execute(delete(RenglonVenta))
-        await session.execute(delete(Venta))
-        await session.execute(delete(PerfilCliente))
-        await session.execute(delete(Cliente))
-        await session.execute(delete(LibroAutor))
-        await session.execute(delete(Libro))
-        await session.execute(delete(Genero))
-        await session.execute(delete(Autor))
-        await session.execute(delete(Editorial))
+        await session.execute(
+            text(
+                "TRUNCATE TABLE movimiento_stock, renglon_venta, venta, asignacion_rol, "
+                "intento_acceso, evento_seguridad, perfil_cliente, cliente, libro_autor, "
+                "libro, genero, autor, editorial, usuario RESTART IDENTITY CASCADE"
+            )
+        )
         await session.commit()
     await engine.dispose()
+
+
+async def _crear_admin_cookie(session: AsyncSession) -> dict[str, str]:
+    """Helper para emitir una cookie de autenticación con rol ADMIN para endpoints protegidos."""
+    from app.core.security import create_access_token
+    from app.modules.usuarios.models import AsignacionRol, Usuario
+
+    suffix = uuid.uuid4().hex[:8]
+    user = Usuario(
+        email=f"admin_gen_{suffix}@test.com",
+        nombre="Admin Generos",
+        password_hash="dummy",
+        activo=True,
+        password_cambiada=True,
+    )
+    session.add(user)
+    await session.flush()
+    session.add(AsignacionRol(usuario_id=user.id, rol="ADMIN"))
+    await session.commit()
+    token = create_access_token({"sub": str(user.id), "roles": ["ADMIN"]})
+    return {"access_token": token}
 
 
 def test_sqlmodel_metadata_registers_genero_and_libro_genero_id() -> None:
@@ -177,21 +196,22 @@ async def test_genero_and_libro_optional_relationship_and_unique_constraint(
 
 @pytest.mark.asyncio
 async def test_post_generos_201_409_rn12_and_422(db_session: AsyncSession) -> None:
-    """Scenarios: Create genre 201, duplicate name 409 without DB internals (RN-12), invalid payload 422."""
+    """Scenarios: Create genre 201 (ADMIN), duplicate name 409 without DB internals (RN-12), invalid payload 422."""
     suffix = uuid.uuid4().hex[:8]
+    cookies = await _crear_admin_cookie(db_session)
     test_app = create_app()
     async with test_app.router.lifespan_context(test_app):
         transport = ASGITransport(app=test_app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(transport=transport, base_url="http://test", cookies=cookies) as client:
             # 1. 201 Created
-            resp_201 = await client.post("/generos/", json={"nombre": f"Fantasía {suffix}"})
+            resp_201 = await client.post("/generos", json={"nombre": f"Fantasía {suffix}"})
             assert resp_201.status_code == 201
             data_201 = resp_201.json()
             assert isinstance(data_201["id"], int)
             assert data_201["nombre"] == f"Fantasía {suffix}"
 
             # 2. 409 Conflict on duplicate nombre (RN-12: no DB internals leaked)
-            resp_409 = await client.post("/generos/", json={"nombre": f"Fantasía {suffix}"})
+            resp_409 = await client.post("/generos", json={"nombre": f"Fantasía {suffix}"})
             assert resp_409.status_code == 409
             body_text = resp_409.text
             for forbidden in (
@@ -204,34 +224,43 @@ async def test_post_generos_201_409_rn12_and_422(db_session: AsyncSession) -> No
             ):
                 assert forbidden not in body_text
 
-            # 3. 422 Unprocessable Entity on empty / blank / missing nombre
-            for invalid_payload in ({}, {"nombre": ""}, {"nombre": "   "}):
-                resp_422 = await client.post("/generos/", json=invalid_payload)
+            # 3. 422 Unprocessable Entity on empty / blank / missing / extra fields (extra="forbid")
+            for invalid_payload in ({}, {"nombre": ""}, {"nombre": "   "}, {"nombre": "Gen", "extra": 1}):
+                resp_422 = await client.post("/generos", json=invalid_payload)
                 assert resp_422.status_code == 422
 
 
 @pytest.mark.asyncio
 async def test_get_generos_pagination_and_rn10_bounds(db_session: AsyncSession) -> None:
-    """Scenario: Paginated genre list respects RN-10 bounds (limit 1..100 default 20, offset >= 0)."""
+    """Scenario: Paginated genre list respects bounds (page >= 1, size 1..100) and returns PaginatedResponse."""
     suffix = uuid.uuid4().hex[:8]
+    cookies = await _crear_admin_cookie(db_session)
     test_app = create_app()
     async with test_app.router.lifespan_context(test_app):
         transport = ASGITransport(app=test_app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Crear géneros con credenciales ADMIN
+        async with AsyncClient(transport=transport, base_url="http://test", cookies=cookies) as admin_client:
             for idx in range(3):
-                r = await client.post("/generos/", json={"nombre": f"Gen {suffix} {idx}"})
+                r = await admin_client.post("/generos", json={"nombre": f"Gen {suffix} {idx}"})
                 assert r.status_code == 201
 
-            resp_page_1 = await client.get("/generos/?limit=2&offset=0")
+        # Listar de forma pública (anónima)
+        async with AsyncClient(transport=transport, base_url="http://test") as anon_client:
+            resp_page_1 = await anon_client.get("/generos?page=1&size=2")
             assert resp_page_1.status_code == 200
-            assert len(resp_page_1.json()) == 2
+            data_p1 = resp_page_1.json()
+            assert data_p1["page"] == 1
+            assert data_p1["size"] == 2
+            assert data_p1["total"] >= 3
+            assert len(data_p1["items"]) == 2
 
-            resp_page_2 = await client.get("/generos/?limit=2&offset=2")
+            resp_page_2 = await anon_client.get("/generos?page=2&size=2")
             assert resp_page_2.status_code == 200
-            assert len(resp_page_2.json()) >= 1
+            data_p2 = resp_page_2.json()
+            assert len(data_p2["items"]) >= 1
 
-            for invalid_query in ("limit=0", "limit=101", "offset=-1"):
-                resp_422 = await client.get(f"/generos/?{invalid_query}")
+            for invalid_query in ("size=0", "size=101", "page=0", "page=9999"):
+                resp_422 = await anon_client.get(f"/generos?{invalid_query}")
                 assert resp_422.status_code == 422
 
 
@@ -239,18 +268,19 @@ async def test_get_generos_pagination_and_rn10_bounds(db_session: AsyncSession) 
 async def test_get_and_patch_genero_by_id_200_404_409_exclude_unset(
     db_session: AsyncSession,
 ) -> None:
-    """Scenario: Genre detail and partial update handle existing, missing, and conflicting records."""
+    """Scenario: Genre detail and partial update handle existing, missing, and conflicting records (ADMIN)."""
     suffix = uuid.uuid4().hex[:8]
+    cookies = await _crear_admin_cookie(db_session)
     test_app = create_app()
     async with test_app.router.lifespan_context(test_app):
         transport = ASGITransport(app=test_app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
-            r1 = await client.post("/generos/", json={"nombre": f"Policial {suffix}"})
-            r2 = await client.post("/generos/", json={"nombre": f"Terror {suffix}"})
+        async with AsyncClient(transport=transport, base_url="http://test", cookies=cookies) as client:
+            r1 = await client.post("/generos", json={"nombre": f"Policial {suffix}"})
+            r2 = await client.post("/generos", json={"nombre": f"Terror {suffix}"})
             id_1 = r1.json()["id"]
             id_2 = r2.json()["id"]
 
-            # GET by ID -> 200
+            # GET by ID -> 200 (ADMIN)
             get_ok = await client.get(f"/generos/{id_1}")
             assert get_ok.status_code == 200
             assert get_ok.json() == {"id": id_1, "nombre": f"Policial {suffix}"}
@@ -291,7 +321,7 @@ async def test_get_and_patch_genero_by_id_200_404_409_exclude_unset(
 
 @pytest.mark.asyncio
 async def test_get_generos_id_libros_paginated_and_404(db_session: AsyncSession) -> None:
-    """Scenario: List books for an existing genre (paginated per RN-10) and 404 when genre missing."""
+    """Scenario: List books for an existing genre (paginated with PaginatedResponse, open read) and 404 when genre missing."""
     suffix = uuid.uuid4().hex[:8]
     editorial = Editorial(nombre=f"Alfaguara {suffix}", pais="España")
     gen_con_libros = Genero(nombre=f"Ensayo {suffix}")
@@ -313,7 +343,7 @@ async def test_get_generos_id_libros_paginated_and_404(db_session: AsyncSession)
                 genero_id=gen_con_libros.id,
             )
         )
-    db_session.commit_id_con = gen_con_libros.id
+    commit_id_con = gen_con_libros.id
     id_vacio = gen_vacio.id
     await db_session.commit()
 
@@ -321,32 +351,37 @@ async def test_get_generos_id_libros_paginated_and_404(db_session: AsyncSession)
     async with test_app.router.lifespan_context(test_app):
         transport = ASGITransport(app=test_app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
-            # Page 1 (limit=2, offset=0) -> 2 books
-            resp_p1 = await client.get(
-                f"/generos/{db_session.commit_id_con}/libros?limit=2&offset=0"
-            )
+            # Page 1 (page=1, size=2) -> 2 books
+            resp_p1 = await client.get(f"/generos/{commit_id_con}/libros?page=1&size=2")
             assert resp_p1.status_code == 200
-            books_p1 = resp_p1.json()
-            assert len(books_p1) == 2
-            assert all(b["genero_id"] == db_session.commit_id_con for b in books_p1)
+            data_p1 = resp_p1.json()
+            assert data_p1["total"] == 3
+            assert data_p1["page"] == 1
+            assert data_p1["size"] == 2
+            assert data_p1["pages"] == 2
+            assert len(data_p1["items"]) == 2
+            assert all(b["genero_id"] == commit_id_con for b in data_p1["items"])
 
-            # Page 2 (limit=2, offset=2) -> 1 book
-            resp_p2 = await client.get(
-                f"/generos/{db_session.commit_id_con}/libros?limit=2&offset=2"
-            )
+            # Page 2 (page=2, size=2) -> 1 book
+            resp_p2 = await client.get(f"/generos/{commit_id_con}/libros?page=2&size=2")
             assert resp_p2.status_code == 200
-            assert len(resp_p2.json()) == 1
+            data_p2 = resp_p2.json()
+            assert len(data_p2["items"]) == 1
 
-            # Empty genre -> 200 []
+            # Empty genre -> 200 con total: 0, items: []
             resp_empty = await client.get(f"/generos/{id_vacio}/libros")
             assert resp_empty.status_code == 200
-            assert resp_empty.json() == []
+            data_empty = resp_empty.json()
+            assert data_empty["total"] == 0
+            assert data_empty["items"] == []
+            assert data_empty["page"] == 1
+            assert data_empty["pages"] == 1
 
             # Nonexistent genre -> 404
             resp_404 = await client.get("/generos/99999999/libros")
             assert resp_404.status_code == 404
 
-            # Invalid pagination -> 422 (RN-10)
-            for bad_q in ("limit=0", "limit=101", "offset=-1"):
-                resp_422 = await client.get(f"/generos/{db_session.commit_id_con}/libros?{bad_q}")
+            # Invalid pagination bounds -> 422
+            for bad_q in ("size=0", "size=101", "page=0", "page=3"):
+                resp_422 = await client.get(f"/generos/{commit_id_con}/libros?{bad_q}")
                 assert resp_422.status_code == 422

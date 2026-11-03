@@ -2,7 +2,7 @@
 
 from decimal import Decimal
 
-from pydantic import field_validator
+from pydantic import ConfigDict, field_validator
 from sqlmodel import SQLModel
 
 
@@ -16,6 +16,8 @@ def _validate_non_empty_nombre(value: str) -> str:
 class GeneroCreate(SQLModel):
     """DTO de entrada para la creación de un género (sin id)."""
 
+    model_config = ConfigDict(extra="forbid")
+
     nombre: str
 
     @field_validator("nombre")
@@ -26,6 +28,8 @@ class GeneroCreate(SQLModel):
 
 class GeneroUpdate(SQLModel):
     """DTO de entrada para actualización parcial (PATCH) de un género."""
+
+    model_config = ConfigDict(extra="forbid")
 
     nombre: str | None = None
 
@@ -40,12 +44,16 @@ class GeneroUpdate(SQLModel):
 class GeneroRead(SQLModel):
     """DTO de salida para lectura de un género."""
 
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
     id: int
     nombre: str
 
 
 class GeneroLibroRead(SQLModel):
     """DTO de salida para los libros listados dentro de un género."""
+
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
 
     id: int
     isbn: str

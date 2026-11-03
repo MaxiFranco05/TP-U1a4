@@ -1,13 +1,10 @@
-"""Lógica de negocio del módulo autores."""
+"""Lógica de negocio del módulo autores sobre UnitOfWork y Repository."""
 
-from decimal import Decimal
 from fastapi import HTTPException, status
-from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload, selectinload
 
 from app.core.exceptions import translate_integrity_error
+from app.core.paginacion import PaginatedResponse, PaginationParams, paginate
 from app.modules.autores.models import Autor
 from app.modules.autores.schemas import (
     AutorCreate,
@@ -15,95 +12,100 @@ from app.modules.autores.schemas import (
     AutorRead,
     AutorUpdate,
 )
-from app.modules.libros.models import Libro, LibroAutor
+from app.modules.autores.unit_of_work import AutoresUnitOfWork
 
 
-async def create_autor(session: AsyncSession, payload: AutorCreate) -> AutorRead:
-    """Crea un nuevo autor delegando la unicidad en la base de datos (DD-04, RN-12)."""
+async def create_autor(
+    uow: AutoresUnitOfWork,
+    payload: AutorCreate,
+) -> AutorRead:
+    """Crea un nuevo autor delegando la unicidad en la base de datos (RN-12)."""
     autor = Autor(nombre=payload.nombre, nacionalidad=payload.nacionalidad)
-    session.add(autor)
-    try:
-        await session.commit()
-    except IntegrityError as exc:
-        await session.rollback()
-        raise translate_integrity_error(exc) from exc
-    await session.refresh(autor)
+    async with uow:
+        try:
+            await uow.autores.add(autor)
+        except IntegrityError as exc:
+            raise translate_integrity_error(exc) from exc
     return AutorRead.model_validate(autor)
 
 
-async def get_autor_or_404(session: AsyncSession, autor_id: int) -> Autor:
-    """Obtiene un autor por su clave primaria o lanza HTTP 404."""
-    autor = await session.get(Autor, autor_id)
-    if autor is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Autor no encontrado",
+async def list_autores(
+    uow: AutoresUnitOfWork,
+    params: PaginationParams,
+) -> PaginatedResponse[AutorRead]:
+    """Lista autores paginados con envoltorio estándar {items, total, page, size, pages}."""
+    async with uow:
+        total = await uow.autores.count()
+        items = await uow.autores.get_all(
+            offset=params.offset,
+            limit=params.limit,
         )
-    return autor
+        dtos = [AutorRead.model_validate(a) for a in items]
+        return paginate(items=dtos, total=total, page=params.page, size=params.size)
 
 
-async def get_autor(session: AsyncSession, autor_id: int) -> AutorRead:
-    """Devuelve el DTO de lectura de un autor existente."""
-    autor = await get_autor_or_404(session, autor_id)
-    return AutorRead.model_validate(autor)
+async def get_autor(
+    uow: AutoresUnitOfWork,
+    autor_id: int,
+) -> AutorRead:
+    """Devuelve el DTO de lectura de un autor existente o lanza 404."""
+    async with uow:
+        autor = await uow.autores.get_by_id(autor_id)
+        if autor is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Autor no encontrado",
+            )
+        return AutorRead.model_validate(autor)
 
 
 async def update_autor(
-    session: AsyncSession,
+    uow: AutoresUnitOfWork,
     autor_id: int,
     payload: AutorUpdate,
 ) -> AutorRead:
-    """Actualiza parcialmente un autor usando exclude_unset=True y traduce colisiones a 409 (RN-12)."""
-    autor = await get_autor_or_404(session, autor_id)
-    updates = payload.model_dump(exclude_unset=True)
-    for field_name, field_value in updates.items():
-        if field_value is not None:
-            setattr(autor, field_name, field_value)
-
-    session.add(autor)
-    try:
-        await session.commit()
-    except IntegrityError as exc:
-        await session.rollback()
-        raise translate_integrity_error(exc) from exc
-    await session.refresh(autor)
-    return AutorRead.model_validate(autor)
+    """Actualiza parcialmente un autor con exclude_unset=True traduciendo colisiones a 409 (RN-12)."""
+    async with uow:
+        autor = await uow.autores.get_by_id(autor_id)
+        if autor is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Autor no encontrado",
+            )
+        updates = payload.model_dump(exclude_unset=True)
+        try:
+            await uow.autores.update(autor, updates)
+        except IntegrityError as exc:
+            raise translate_integrity_error(exc) from exc
+        return AutorRead.model_validate(autor)
 
 
 async def list_libros_by_autor(
-    session: AsyncSession,
+    uow: AutoresUnitOfWork,
     autor_id: int,
-    limit: int,
-    offset: int,
-) -> list[AutorLibroItem]:
-    """Lista los libros de un autor existente con rol y orden de forma paginada (RN-10)."""
-    await get_autor_or_404(session, autor_id)
-    stmt = (
-        select(Libro)
-        .join(LibroAutor, Libro.id == LibroAutor.libro_id)
-        .where(LibroAutor.autor_id == autor_id)
-        .options(
-            joinedload(Libro.editorial),
-            joinedload(Libro.genero),
+    params: PaginationParams,
+) -> PaginatedResponse[AutorLibroItem]:
+    """Lista los libros activos de un autor con rol y orden de forma paginada."""
+    async with uow:
+        autor = await uow.autores.get_by_id(autor_id)
+        if autor is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Autor no encontrado",
+            )
+        pairs, total = await uow.autores.get_libros_autor_paginado(
+            autor_id=autor_id,
+            offset=params.offset,
+            limit=params.limit,
         )
-        .order_by(Libro.id)
-        .limit(limit)
-        .offset(offset)
-    )
-    result = await session.execute(stmt)
-    libros = result.unique().scalars().all()
-
-    items = []
-    for libro in libros:
-        # Find the LibroAutor for this autor to get rol and orden
-        libro_autor = next((la for la in libro.autorias if la.autor_id == autor_id), None)
-        if libro_autor:
+        items: list[AutorLibroItem] = []
+        for libro, libro_autor in pairs:
             items.append(
                 AutorLibroItem(
                     id=libro.id,
                     isbn=libro.isbn,
                     titulo=libro.titulo,
-                    precio=float(libro.precio),
+                    precio=libro.precio,
                     stock=libro.stock,
                     editorial_id=libro.editorial_id,
                     genero_id=libro.genero_id,
@@ -111,4 +113,4 @@ async def list_libros_by_autor(
                     orden=libro_autor.orden,
                 )
             )
-    return items
+        return paginate(items=items, total=total, page=params.page, size=params.size)

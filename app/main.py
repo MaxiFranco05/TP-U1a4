@@ -11,13 +11,22 @@ from app.core.config import get_settings
 from app.core.database import build_engine, build_session_factory
 from app.core.dependencies import requiere_rol, verificar_password_cambiada
 from app.modules.autores import models as _autores_models  # noqa: F401
-from app.modules.autores.router import router as autores_router
+from app.modules.autores.router import (
+    protected_router as autores_protected_router,
+    public_router as autores_public_router,
+)
 from app.modules.clientes import models as _clientes_models  # noqa: F401
 from app.modules.clientes.router import router as clientes_router
 from app.modules.editoriales import models as _editoriales_models  # noqa: F401
-from app.modules.editoriales.router import router as editoriales_router
+from app.modules.editoriales.router import (
+    protected_router as editoriales_protected_router,
+    public_router as editoriales_public_router,
+)
 from app.modules.generos import models as _generos_models  # noqa: F401
-from app.modules.generos.router import router as generos_router
+from app.modules.generos.router import (
+    protected_router as generos_protected_router,
+    public_router as generos_public_router,
+)
 from app.modules.health.router import router as health_router
 from app.modules.usuarios import models as _usuarios_models  # noqa: F401
 from app.modules.usuarios.router import (
@@ -26,7 +35,10 @@ from app.modules.usuarios.router import (
     usuarios_router,
 )
 from app.modules.libros import models as _libros_models  # noqa: F401
-from app.modules.libros.router import router as libros_router
+from app.modules.libros.router import (
+    protected_router as libros_protected_router,
+    public_router as libros_public_router,
+)
 from app.modules.ventas import models as _ventas_models  # noqa: F401
 from app.modules.ventas.router import router as ventas_router
 
@@ -67,15 +79,21 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
 def _build_route_groups() -> tuple[APIRouter, APIRouter]:
     """Construye los dos grupos de rutas de nivel superior: abierto y protegido.
 
-    - router_abierto: sondas de salud (/health/*), autenticación (/auth/*) y lecturas públicas.
+    - router_abierto: sondas de salud (/health/*), autenticación (/auth/*) y lecturas públicas de catálogo.
     - router_protegido: rutas protegidas donde se montará una sola vez el bloqueo por
-      cambio obligatorio de contraseña (debe_cambiar_password).
+      cambio obligatorio de contraseña (debe_cambiar_password) y control de roles RBAC (ADMIN).
     """
     open_group = APIRouter()
     protected_group = APIRouter(dependencies=[Depends(verificar_password_cambiada)])
 
     open_group.include_router(health_router)
     open_group.include_router(auth_router)
+
+    # Catálogo público (lecturas abiertas sin sesión)
+    open_group.include_router(editoriales_public_router)
+    open_group.include_router(generos_public_router)
+    open_group.include_router(autores_public_router)
+    open_group.include_router(libros_public_router)
 
     # Rutas protegidas de administración de usuarios y personal (exigen ADMIN y contraseña cambiada)
     protected_group.include_router(
@@ -87,11 +105,25 @@ def _build_route_groups() -> tuple[APIRouter, APIRouter]:
         dependencies=[Depends(requiere_rol("ADMIN"))],
     )
 
-    # Rutas de catálogo y negocio
-    protected_group.include_router(editoriales_router)
-    protected_group.include_router(generos_router)
-    protected_group.include_router(autores_router)
-    protected_group.include_router(libros_router)
+    # Catálogo protegido (escrituras y detalle restringido exigen ADMIN)
+    protected_group.include_router(
+        editoriales_protected_router,
+        dependencies=[Depends(requiere_rol("ADMIN"))],
+    )
+    protected_group.include_router(
+        generos_protected_router,
+        dependencies=[Depends(requiere_rol("ADMIN"))],
+    )
+    protected_group.include_router(
+        autores_protected_router,
+        dependencies=[Depends(requiere_rol("ADMIN"))],
+    )
+    protected_group.include_router(
+        libros_protected_router,
+        dependencies=[Depends(requiere_rol("ADMIN"))],
+    )
+
+    # Rutas de clientes y ventas
     protected_group.include_router(clientes_router)
     protected_group.include_router(ventas_router)
     return open_group, protected_group

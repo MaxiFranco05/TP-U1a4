@@ -1,10 +1,10 @@
-"""Lógica de negocio del módulo generos."""
+"""Lógica de negocio del módulo generos sobre UnitOfWork y Repository."""
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import translate_integrity_error
+from app.core.paginacion import PaginatedResponse, PaginationParams, paginate
 from app.modules.generos.models import Genero
 from app.modules.generos.schemas import (
     GeneroCreate,
@@ -12,94 +12,94 @@ from app.modules.generos.schemas import (
     GeneroRead,
     GeneroUpdate,
 )
+from app.modules.generos.unit_of_work import GenerosUnitOfWork
 from app.modules.libros.models import Libro
 
 
-async def create_genero(session: AsyncSession, payload: GeneroCreate) -> GeneroRead:
-    """Crea un nuevo género delegando la unicidad en la base de datos (DD-04, RN-12)."""
+async def create_genero(
+    uow: GenerosUnitOfWork,
+    payload: GeneroCreate,
+) -> GeneroRead:
+    """Crea un nuevo género delegando la unicidad en la base de datos (RN-12)."""
     genero = Genero(nombre=payload.nombre)
-    session.add(genero)
-    try:
-        await session.commit()
-    except IntegrityError as exc:
-        await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Ya existe un género con ese nombre",
-        ) from exc
-    await session.refresh(genero)
+    async with uow:
+        try:
+            await uow.generos.add(genero)
+        except IntegrityError as exc:
+            raise translate_integrity_error(exc) from exc
     return GeneroRead.model_validate(genero)
 
 
 async def list_generos(
-    session: AsyncSession,
-    limit: int,
-    offset: int,
-) -> list[GeneroRead]:
-    """Lista géneros paginados ordenados por ID (RN-10)."""
-    stmt = select(Genero).order_by(Genero.id).limit(limit).offset(offset)
-    result = await session.execute(stmt)
-    generos = result.scalars().all()
-    return [GeneroRead.model_validate(g) for g in generos]
-
-
-async def get_genero_or_404(session: AsyncSession, genero_id: int) -> Genero:
-    """Obtiene un género por su clave primaria o lanza HTTP 404."""
-    genero = await session.get(Genero, genero_id)
-    if genero is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Género no encontrado",
+    uow: GenerosUnitOfWork,
+    params: PaginationParams,
+) -> PaginatedResponse[GeneroRead]:
+    """Lista géneros paginados con envoltorio estándar {items, total, page, size, pages}."""
+    async with uow:
+        total = await uow.generos.count()
+        items = await uow.generos.get_all(
+            offset=params.offset,
+            limit=params.limit,
         )
-    return genero
+        dtos = [GeneroRead.model_validate(g) for g in items]
+        return paginate(items=dtos, total=total, page=params.page, size=params.size)
 
 
-async def get_genero(session: AsyncSession, genero_id: int) -> GeneroRead:
-    """Devuelve el DTO de lectura de un género existente."""
-    genero = await get_genero_or_404(session, genero_id)
-    return GeneroRead.model_validate(genero)
+async def get_genero(
+    uow: GenerosUnitOfWork,
+    genero_id: int,
+) -> GeneroRead:
+    """Devuelve el DTO de lectura de un género existente o lanza 404."""
+    async with uow:
+        genero = await uow.generos.get_by_id(genero_id)
+        if genero is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Género no encontrado",
+            )
+        return GeneroRead.model_validate(genero)
 
 
 async def update_genero(
-    session: AsyncSession,
+    uow: GenerosUnitOfWork,
     genero_id: int,
     payload: GeneroUpdate,
 ) -> GeneroRead:
-    """Actualiza parcialmente un género usando exclude_unset=True y traduce colisiones a 409 (RN-12)."""
-    genero = await get_genero_or_404(session, genero_id)
-    updates = payload.model_dump(exclude_unset=True)
-    for field_name, field_value in updates.items():
-        if field_value is not None:
-            setattr(genero, field_name, field_value)
-
-    session.add(genero)
-    try:
-        await session.commit()
-    except IntegrityError as exc:
-        await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Ya existe un género con ese nombre",
-        ) from exc
-    await session.refresh(genero)
-    return GeneroRead.model_validate(genero)
+    """Actualiza parcialmente un género traduciendo colisiones de unicidad a 409 (RN-12)."""
+    async with uow:
+        genero = await uow.generos.get_by_id(genero_id)
+        if genero is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Género no encontrado",
+            )
+        updates = payload.model_dump(exclude_unset=True)
+        try:
+            await uow.generos.update(genero, updates)
+        except IntegrityError as exc:
+            raise translate_integrity_error(exc) from exc
+        return GeneroRead.model_validate(genero)
 
 
 async def list_libros_by_genero(
-    session: AsyncSession,
+    uow: GenerosUnitOfWork,
     genero_id: int,
-    limit: int,
-    offset: int,
-) -> list[GeneroLibroRead]:
-    """Lista los libros pertenecientes a un género existente de forma paginada (RN-10)."""
-    await get_genero_or_404(session, genero_id)
-    stmt = (
-        select(Libro)
-        .where(Libro.genero_id == genero_id)
-        .order_by(Libro.id)
-        .limit(limit)
-        .offset(offset)
-    )
-    result = await session.execute(stmt)
-    libros = result.scalars().all()
-    return [GeneroLibroRead.model_validate(libro) for libro in libros]
+    params: PaginationParams,
+) -> PaginatedResponse[GeneroLibroRead]:
+    """Lista los libros activos pertenecientes a un género existente con paginación uniforme."""
+    async with uow:
+        genero = await uow.generos.get_by_id(genero_id)
+        if genero is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Género no encontrado",
+            )
+        filters = (Libro.genero_id == genero_id,)
+        total = await uow.libros.count(filters=filters)
+        libros = await uow.libros.get_all(
+            offset=params.offset,
+            limit=params.limit,
+            filters=filters,
+        )
+        dtos = [GeneroLibroRead.model_validate(libro) for libro in libros]
+        return paginate(items=dtos, total=total, page=params.page, size=params.size)

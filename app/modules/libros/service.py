@@ -1,223 +1,205 @@
-"""Lógica de negocio del módulo libros."""
+"""Lógica de negocio del módulo libros sobre UnitOfWork, Repository y punto único de stock."""
 
 from decimal import Decimal
-from typing import List, Optional
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload, selectinload
 
 from app.core.exceptions import translate_integrity_error
+from app.core.paginacion import PaginatedResponse, PaginationParams, paginate
 from app.modules.libros.models import Libro, LibroAutor
 from app.modules.libros.schemas import (
-    AutorCreateNested,
-    AutorRead,
-    AutoriaRead,
     LibroCreate,
     LibroListItem,
     LibroRead,
     LibroUpdate,
-    EditorialRead,
-    GeneroRead,
+    MovimientoStockRead,
 )
+from app.modules.libros.unit_of_work import LibrosUnitOfWork
 
 
-async def create_libro_with_autores(
-    session: AsyncSession,
+async def create_libro(
+    uow: LibrosUnitOfWork,
     payload: LibroCreate,
+    usuario_id: int,
 ) -> LibroRead:
-    """Crea un libro con sus autores en una sola transacción (DD-04, RN-12)."""
+    """Crea un libro con stock=0 y registra stock inicial por el punto único de stock (RN-11, RN-12)."""
     libro = Libro(
         isbn=payload.isbn,
         titulo=payload.titulo,
         precio=payload.precio,
-        stock=payload.stock,
+        stock=0,
         editorial_id=payload.editorial_id,
         genero_id=payload.genero_id,
     )
-    session.add(libro)
 
-    try:
-        await session.flush()  # Get the libro.id
+    async with uow:
+        try:
+            await uow.libros.add(libro)
 
-        # Add LibroAutor entries after flush so libro.id is available
-        for autor_data in payload.autores:
-            libro_autor = LibroAutor(
-                libro_id=libro.id,
-                autor_id=autor_data.autor_id,
-                rol=autor_data.rol,
-                orden=autor_data.orden,
+            for autor_data in payload.autores:
+                la = LibroAutor(
+                    libro_id=libro.id,
+                    autor_id=autor_data.autor_id,
+                    rol=autor_data.rol,
+                    orden=autor_data.orden,
+                )
+                uow.session.add(la)
+
+            await uow.session.flush()
+
+            if payload.stock_inicial > 0:
+                await uow.registrar_movimiento_stock(
+                    libro=libro,
+                    cantidad=payload.stock_inicial,
+                    motivo="Stock inicial",
+                    usuario_id=usuario_id,
+                )
+        except IntegrityError as exc:
+            raise translate_integrity_error(exc) from exc
+
+        detalle = await uow.libros.get_detalle(libro.id)
+        if detalle is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Error al recuperar el libro creado",
             )
-            session.add(libro_autor)
+        return LibroRead.model_validate(detalle)
 
-        await session.commit()
-    except IntegrityError as exc:
-        await session.rollback()
-        raise translate_integrity_error(exc) from exc
 
-    # Reload with relationships for response
-    await session.refresh(libro)
-    stmt = (
-        select(Libro)
-        .where(Libro.id == libro.id)
-        .options(
-            joinedload(Libro.editorial),
-            joinedload(Libro.genero),
-            selectinload(Libro.autorias).joinedload(LibroAutor.autor),
-        )
-    )
-    result = await session.execute(stmt)
-    libro_full = result.unique().scalar_one()
-    return _libro_to_read(libro_full)
+# Alias para retrocompatibilidad con tests existentes si fuera necesario
+create_libro_with_autores = create_libro
 
 
 async def list_libros(
-    session: AsyncSession,
-    limit: int,
-    offset: int,
-    titulo: Optional[str] = None,
-    genero_id: Optional[int] = None,
-) -> List[LibroListItem]:
-    """Lista libros paginados con filtros opcionales (RN-10, RN-11) y carga anticipada."""
-    stmt = (
-        select(Libro)
-        .options(
-            joinedload(Libro.editorial),
-            joinedload(Libro.genero),
-            selectinload(Libro.autorias).joinedload(LibroAutor.autor),
+    uow: LibrosUnitOfWork,
+    params: PaginationParams,
+    titulo: str | None = None,
+) -> PaginatedResponse[LibroListItem]:
+    """Lista libros activos paginados con envoltorio uniforme y filtrado parametrizado seguro."""
+    async with uow:
+        filters = []
+        if titulo is not None:
+            filters.append(Libro.titulo.ilike(f"%{titulo}%"))
+
+        total = await uow.libros.count(filters=filters)
+        items = await uow.libros.get_all(
+            offset=params.offset,
+            limit=params.limit,
+            filters=filters,
         )
-        .order_by(Libro.id)
-    )
-
-    if titulo:
-        stmt = stmt.where(Libro.titulo.ilike(f"%{titulo}%"))
-    if genero_id is not None:
-        stmt = stmt.where(Libro.genero_id == genero_id)
-
-    stmt = stmt.limit(limit).offset(offset)
-    result = await session.execute(stmt)
-    libros = result.scalars().all()
-    return [LibroListItem.model_validate(libro) for libro in libros]
+        dtos = [LibroListItem.model_validate(l) for l in items]
+        return paginate(items=dtos, total=total, page=params.page, size=params.size)
 
 
 async def get_libro(
-    session: AsyncSession,
+    uow: LibrosUnitOfWork,
     libro_id: int,
 ) -> LibroRead:
-    """Obtiene detalle de libro con eager loading (fixed query count)."""
-    stmt = (
-        select(Libro)
-        .where(Libro.id == libro_id)
-        .options(
-            joinedload(Libro.editorial),
-            joinedload(Libro.genero),
-            selectinload(Libro.autorias).joinedload(LibroAutor.autor),
-        )
-    )
-    result = await session.execute(stmt)
-    libro = result.unique().scalar_one_or_none()
-
-    if libro is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Libro no encontrado",
-        )
-
-    return _libro_to_read(libro)
+    """Obtiene el detalle completo de un libro activo o lanza 404."""
+    async with uow:
+        libro = await uow.libros.get_detalle(libro_id)
+        if libro is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Libro no encontrado",
+            )
+        return LibroRead.model_validate(libro)
 
 
 async def update_libro(
-    session: AsyncSession,
+    uow: LibrosUnitOfWork,
     libro_id: int,
     payload: LibroUpdate,
 ) -> LibroRead:
-    """Actualiza parcialmente un libro existente (RN-12, DD-04)."""
-    stmt = (
-        select(Libro)
-        .where(Libro.id == libro_id)
-        .options(
-            joinedload(Libro.editorial),
-            joinedload(Libro.genero),
-            selectinload(Libro.autorias).joinedload(LibroAutor.autor),
-        )
-    )
-    result = await session.execute(stmt)
-    libro = result.unique().scalar_one_or_none()
+    """Actualiza parcialmente un libro activo (solo título y precio) traduciendo errores a 409 (RN-12)."""
+    async with uow:
+        libro = await uow.libros.get_by_id(libro_id)
+        if libro is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Libro no encontrado",
+            )
+        updates = payload.model_dump(exclude_unset=True)
+        try:
+            await uow.libros.update(libro, updates)
+        except IntegrityError as exc:
+            raise translate_integrity_error(exc) from exc
 
-    if libro is None:
+        detalle = await uow.libros.get_detalle(libro_id)
+        return LibroRead.model_validate(detalle)
+
+
+async def delete_libro(
+    uow: LibrosUnitOfWork,
+    libro_id: int,
+) -> None:
+    """Realiza la baja lógica de un libro marcando borrado_en (RN-13) o lanza 404."""
+    async with uow:
+        libro = await uow.libros.get_by_id(libro_id)
+        if libro is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Libro no encontrado",
+            )
+        await uow.libros.soft_delete(libro)
+
+
+async def reponer_stock(
+    uow: LibrosUnitOfWork,
+    libro_id: int,
+    cantidad: int,
+    usuario_id: int,
+) -> LibroRead:
+    """Repone stock a un libro activo mediante el punto único de stock (RN-11)."""
+    if cantidad <= 0:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Libro no encontrado",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="La cantidad a reponer debe ser mayor a 0",
         )
 
-    update_data = payload.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(libro, field, value)
-
-    try:
-        session.add(libro)
-        await session.commit()
-    except IntegrityError as exc:
-        await session.rollback()
-        raise translate_integrity_error(exc) from exc
-
-    stmt_reload = (
-        select(Libro)
-        .where(Libro.id == libro_id)
-        .options(
-            joinedload(Libro.editorial),
-            joinedload(Libro.genero),
-            selectinload(Libro.autorias).joinedload(LibroAutor.autor),
-        )
-    )
-    res_reload = await session.execute(stmt_reload)
-    libro_updated = res_reload.unique().scalar_one()
-    return _libro_to_read(libro_updated)
-
-
-def _libro_to_read(libro: Libro) -> LibroRead:
-    """Convierte un modelo Libro con relaciones cargadas a LibroRead."""
-    editorial_read = None
-    if libro.editorial:
-        editorial_read = EditorialRead(
-            id=libro.editorial.id,
-            nombre=libro.editorial.nombre,
-            pais=libro.editorial.pais,
-        )
-
-    genero_read = None
-    if libro.genero:
-        genero_read = GeneroRead(
-            id=libro.genero.id,
-            nombre=libro.genero.nombre,
-        )
-
-    autorias_read = []
-    for la in libro.autorias:
-        if la.autor:
-            autor_read = AutorRead(
-                id=la.autor.id,
-                nombre=la.autor.nombre,
-                nacionalidad=la.autor.nacionalidad,
+    async with uow:
+        libro = await uow.libros.get_by_id(libro_id)
+        if libro is None:
+            hist = await uow.libros.get_by_id_including_deleted(libro_id)
+            if hist is not None and hist.borrado_en is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="No se puede reponer stock de un libro dado de baja",
+                )
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Libro no encontrado",
             )
-            autoria_read = AutoriaRead(
-                autor=autor_read,
-                rol=la.rol,
-                orden=la.orden,
-            )
-            autorias_read.append(autoria_read)
 
-    return LibroRead(
-        id=libro.id,
-        isbn=libro.isbn,
-        titulo=libro.titulo,
-        precio=libro.precio,
-        stock=libro.stock,
-        editorial_id=libro.editorial_id,
-        genero_id=libro.genero_id,
-        editorial=editorial_read,
-        genero=genero_read,
-        autorias=autorias_read,
-    )
+        try:
+            await uow.registrar_movimiento_stock(
+                libro=libro,
+                cantidad=cantidad,
+                motivo="Reposición",
+                usuario_id=usuario_id,
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(exc),
+            ) from exc
+
+        detalle = await uow.libros.get_detalle(libro_id)
+        return LibroRead.model_validate(detalle)
+
+
+async def list_movimientos(
+    uow: LibrosUnitOfWork,
+    libro_id: int,
+) -> list[MovimientoStockRead]:
+    """Lista cronológicamente todos los movimientos de stock del libro (ADMIN) o lanza 404."""
+    async with uow:
+        hist = await uow.libros.get_by_id_including_deleted(libro_id)
+        if hist is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Libro no encontrado",
+            )
+        movimientos = await uow.movimientos.get_movimientos_by_libro(libro_id)
+        return [MovimientoStockRead.model_validate(m) for m in movimientos]

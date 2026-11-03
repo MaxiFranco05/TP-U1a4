@@ -1,10 +1,10 @@
-"""Router HTTP del módulo generos."""
+"""Router HTTP del módulo generos (rutas públicas y protegidas)."""
 
-from typing import Annotated
+from fastapi import APIRouter, Depends, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from fastapi import APIRouter, Path, Query, status
-
-from app.core.database import SessionDep
+from app.core.database import get_session
+from app.core.paginacion import PaginatedResponse, PaginationParams
 from app.modules.generos.schemas import (
     GeneroCreate,
     GeneroLibroRead,
@@ -18,58 +18,106 @@ from app.modules.generos.service import (
     list_libros_by_genero,
     update_genero,
 )
-
-router = APIRouter(prefix="/generos", tags=["generos"])
-
-LimitQuery = Annotated[int, Query(ge=1, le=100)]
-OffsetQuery = Annotated[int, Query(ge=0)]
-GeneroIdPath = Annotated[int, Path(ge=1)]
+from app.modules.generos.unit_of_work import GenerosUnitOfWork
 
 
-@router.post("/", status_code=status.HTTP_201_CREATED)
+def get_generos_uow(
+    session: AsyncSession = Depends(get_session),
+) -> GenerosUnitOfWork:
+    """Provee una instancia de GenerosUnitOfWork compartiendo la sesión de la petición."""
+    return GenerosUnitOfWork(session=session)
+
+
+public_router = APIRouter(prefix="/generos", tags=["Géneros"])
+protected_router = APIRouter(prefix="/generos", tags=["Géneros"])
+
+
+# --- Rutas Públicas (Lectura Abierta) ---
+
+
+@public_router.get(
+    "",
+    response_model=PaginatedResponse[GeneroRead],
+    status_code=status.HTTP_200_OK,
+)
+@public_router.get(
+    "/",
+    response_model=PaginatedResponse[GeneroRead],
+    status_code=status.HTTP_200_OK,
+    include_in_schema=False,
+)
+async def get_generos_list(
+    params: PaginationParams = Depends(),
+    uow: GenerosUnitOfWork = Depends(get_generos_uow),
+) -> PaginatedResponse[GeneroRead]:
+    """Lista géneros paginados con envoltorio uniforme (abierto al público)."""
+    return await list_generos(uow=uow, params=params)
+
+
+@public_router.get(
+    "/{genero_id}/libros",
+    response_model=PaginatedResponse[GeneroLibroRead],
+    status_code=status.HTTP_200_OK,
+)
+async def get_generos_libros(
+    genero_id: int,
+    params: PaginationParams = Depends(),
+    uow: GenerosUnitOfWork = Depends(get_generos_uow),
+) -> PaginatedResponse[GeneroLibroRead]:
+    """Lista los libros activos pertenecientes a un género (abierto al público)."""
+    return await list_libros_by_genero(uow=uow, genero_id=genero_id, params=params)
+
+
+# --- Rutas Protegidas (Exigen ADMIN) ---
+
+
+@protected_router.post(
+    "",
+    response_model=GeneroRead,
+    status_code=status.HTTP_201_CREATED,
+)
+@protected_router.post(
+    "/",
+    response_model=GeneroRead,
+    status_code=status.HTTP_201_CREATED,
+    include_in_schema=False,
+)
 async def post_genero(
     payload: GeneroCreate,
-    session: SessionDep,
+    uow: GenerosUnitOfWork = Depends(get_generos_uow),
 ) -> GeneroRead:
-    """Crea un nuevo género literario."""
-    return await create_genero(session, payload)
+    """Crea un nuevo género (ADMIN)."""
+    return await create_genero(uow=uow, payload=payload)
 
 
-@router.get("/")
-async def get_generos(
-    session: SessionDep,
-    limit: LimitQuery = 20,
-    offset: OffsetQuery = 0,
-) -> list[GeneroRead]:
-    """Lista géneros de forma paginada (RN-10)."""
-    return await list_generos(session, limit=limit, offset=offset)
-
-
-@router.get("/{genero_id}")
-async def get_genero_by_id(
-    genero_id: GeneroIdPath,
-    session: SessionDep,
+@protected_router.get(
+    "/{genero_id}",
+    response_model=GeneroRead,
+    status_code=status.HTTP_200_OK,
+)
+async def get_genero_detail(
+    genero_id: int,
+    uow: GenerosUnitOfWork = Depends(get_generos_uow),
 ) -> GeneroRead:
-    """Obtiene el detalle de un género por su identificador."""
-    return await get_genero(session, genero_id)
+    """Obtiene el detalle de un género (ADMIN)."""
+    return await get_genero(uow=uow, genero_id=genero_id)
 
 
-@router.patch("/{genero_id}")
+@protected_router.patch(
+    "/{genero_id}",
+    response_model=GeneroRead,
+    status_code=status.HTTP_200_OK,
+)
 async def patch_genero(
-    genero_id: GeneroIdPath,
+    genero_id: int,
     payload: GeneroUpdate,
-    session: SessionDep,
+    uow: GenerosUnitOfWork = Depends(get_generos_uow),
 ) -> GeneroRead:
-    """Actualiza parcialmente un género existente."""
-    return await update_genero(session, genero_id, payload)
+    """Actualiza parcialmente un género (ADMIN)."""
+    return await update_genero(uow=uow, genero_id=genero_id, payload=payload)
 
 
-@router.get("/{genero_id}/libros")
-async def get_libros_by_genero(
-    genero_id: GeneroIdPath,
-    session: SessionDep,
-    limit: LimitQuery = 20,
-    offset: OffsetQuery = 0,
-) -> list[GeneroLibroRead]:
-    """Lista los libros asociados a un género de forma paginada (RN-10)."""
-    return await list_libros_by_genero(session, genero_id, limit=limit, offset=offset)
+# Router combinado para compatibilidad
+router = APIRouter()
+router.include_router(public_router)
+router.include_router(protected_router)

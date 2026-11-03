@@ -1,14 +1,21 @@
 """Esquemas DTO del módulo libros."""
 
+from datetime import datetime
 from decimal import Decimal
-from typing import Annotated, List
+from typing import Annotated
 
-from pydantic import Field, field_validator
+from pydantic import ConfigDict, Field, field_validator
 from sqlmodel import SQLModel
+
+from app.modules.autores.schemas import AutorRead
+from app.modules.editoriales.schemas import EditorialRead
+from app.modules.generos.schemas import GeneroRead
 
 
 class AutorCreateNested(SQLModel):
-    """DTO para autor dentro de creación de libro (autor existente + rol + orden)."""
+    """DTO para autor dentro de la creación de libro (autor existente + rol + orden)."""
+
+    model_config = ConfigDict(extra="forbid")
 
     autor_id: int
     rol: str
@@ -31,15 +38,17 @@ class AutorCreateNested(SQLModel):
 
 
 class LibroCreate(SQLModel):
-    """DTO de entrada para la creación de un libro con autores."""
+    """DTO de entrada para la creación de un libro con stock inicial y autores."""
+
+    model_config = ConfigDict(extra="forbid")
 
     isbn: str
     titulo: str
     precio: Decimal = Field(gt=0, description="Precio debe ser positivo")
-    stock: int = Field(ge=0, description="Stock no puede ser negativo")
+    stock_inicial: int = Field(default=0, ge=0, description="Stock inicial no puede ser negativo")
     editorial_id: int = Field(ge=1)
     genero_id: int | None = None
-    autores: List[AutorCreateNested] = Field(default_factory=list)
+    autores: list[AutorCreateNested] = Field(default_factory=list)
 
     @field_validator("titulo")
     @classmethod
@@ -51,14 +60,12 @@ class LibroCreate(SQLModel):
 
 
 class LibroUpdate(SQLModel):
-    """DTO de entrada para la actualización parcial de un libro."""
+    """DTO de entrada para la actualización parcial (PATCH) de un libro (solo título y precio)."""
 
-    isbn: str | None = None
+    model_config = ConfigDict(extra="forbid")
+
     titulo: str | None = None
     precio: Decimal | None = Field(default=None, gt=0, description="Precio debe ser positivo")
-    stock: int | None = Field(default=None, ge=0, description="Stock no puede ser negativo")
-    editorial_id: int | None = Field(default=None, ge=1)
-    genero_id: int | None = Field(default=None, ge=1)
 
     @field_validator("titulo")
     @classmethod
@@ -71,64 +78,68 @@ class LibroUpdate(SQLModel):
         return value
 
 
-class LibroRead(SQLModel):
-    """DTO de salida para detalle completo de un libro."""
+class ReponerStockRequest(SQLModel):
+    """DTO de entrada para reposición de stock (ADMIN)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    cantidad: int = Field(gt=0, description="Cantidad a reponer (debe ser mayor a 0)")
+
+
+class MovimientoStockRead(SQLModel):
+    """DTO de salida para consulta de movimientos de stock."""
+
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
 
     id: int
-    isbn: str
-    titulo: str
-    precio: Decimal
-    stock: int
-    editorial_id: int
-    genero_id: int | None
-    editorial: "EditorialRead"
-    genero: "GeneroRead | None"
-    autorias: List["AutoriaRead"]
-
-
-class LibroListItem(SQLModel):
-    """DTO de salida para listado de libros."""
-
-    id: int
-    isbn: str
-    titulo: str
-    precio: Decimal
-    stock: int
-    editorial_id: int
-    genero_id: int | None
+    libro_id: int
+    venta_id: int | None = None
+    usuario_id: int
+    cantidad: int
+    motivo: str
+    cuando: datetime
 
 
 class AutoriaRead(SQLModel):
     """DTO para autoría en detalle de libro."""
 
-    autor: "AutorRead"
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
+    autor: AutorRead
     rol: str
     orden: int
 
 
-class EditorialRead(SQLModel):
-    """DTO de editorial en detalle de libro."""
+class LibroRead(SQLModel):
+    """DTO de salida para detalle completo de un libro."""
+
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
 
     id: int
-    nombre: str
-    pais: str | None
+    isbn: str
+    titulo: str
+    precio: Decimal
+    stock: int
+    editorial_id: int
+    genero_id: int | None
+    editorial: EditorialRead
+    genero: GeneroRead | None
+    autorias: list[AutoriaRead]
 
 
-class GeneroRead(SQLModel):
-    """DTO de género en detalle de libro."""
+class LibroListItem(SQLModel):
+    """DTO de salida para listado de libros."""
+
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
 
     id: int
-    nombre: str
+    isbn: str
+    titulo: str
+    precio: Decimal
+    stock: int
+    editorial_id: int
+    genero_id: int | None
 
 
-class AutorRead(SQLModel):
-    """DTO de autor en detalle de libro."""
-
-    id: int
-    nombre: str
-    nacionalidad: str | None
-
-
-# Resolve forward references
 LibroRead.model_rebuild()
 AutoriaRead.model_rebuild()

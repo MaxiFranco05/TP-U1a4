@@ -1,9 +1,6 @@
 """Esquemas DTO del módulo editoriales."""
 
-from decimal import Decimal
-from typing import Annotated
-
-from pydantic import field_validator
+from pydantic import ConfigDict, field_validator
 from sqlmodel import SQLModel
 
 
@@ -17,6 +14,8 @@ def _validate_non_empty_nombre(value: str) -> str:
 class EditorialCreate(SQLModel):
     """DTO de entrada para la creación de una editorial (sin id)."""
 
+    model_config = ConfigDict(extra="forbid")
+
     nombre: str
     pais: str | None = None
 
@@ -28,6 +27,8 @@ class EditorialCreate(SQLModel):
 
 class EditorialUpdate(SQLModel):
     """DTO de entrada para actualización parcial (PATCH) de una editorial."""
+
+    model_config = ConfigDict(extra="forbid")
 
     nombre: str | None = None
     pais: str | None = None
@@ -43,6 +44,8 @@ class EditorialUpdate(SQLModel):
 class EditorialRead(SQLModel):
     """DTO de salida para lectura de una editorial."""
 
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
     id: int
     nombre: str
     pais: str | None
@@ -50,6 +53,8 @@ class EditorialRead(SQLModel):
 
 class EditorialListItem(SQLModel):
     """DTO de salida para listado de editoriales."""
+
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
 
     id: int
     nombre: str

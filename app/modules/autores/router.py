@@ -1,11 +1,10 @@
-"""Router HTTP del módulo autores."""
+"""Router HTTP del módulo autores (rutas públicas y protegidas)."""
 
-from typing import Annotated
+from fastapi import APIRouter, Depends, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from fastapi import APIRouter, Depends, Path, status
-
-from app.core.database import SessionDep
-from app.core.pagination import PaginationParams, get_pagination_params
+from app.core.database import get_session
+from app.core.paginacion import PaginatedResponse, PaginationParams
 from app.modules.autores.schemas import (
     AutorCreate,
     AutorLibroItem,
@@ -15,48 +14,110 @@ from app.modules.autores.schemas import (
 from app.modules.autores.service import (
     create_autor,
     get_autor,
+    list_autores,
     list_libros_by_autor,
     update_autor,
 )
-
-router = APIRouter(prefix="/autores", tags=["autores"])
-
-AutorIdPath = Annotated[int, Path(ge=1)]
+from app.modules.autores.unit_of_work import AutoresUnitOfWork
 
 
-@router.post("/", status_code=status.HTTP_201_CREATED)
+def get_autores_uow(
+    session: AsyncSession = Depends(get_session),
+) -> AutoresUnitOfWork:
+    """Provee una instancia de AutoresUnitOfWork compartiendo la sesión de la petición."""
+    return AutoresUnitOfWork(session=session)
+
+
+public_router = APIRouter(prefix="/autores", tags=["Autores"])
+protected_router = APIRouter(prefix="/autores", tags=["Autores"])
+
+
+# --- Rutas Públicas (Lectura Abierta) ---
+
+
+@public_router.get(
+    "",
+    response_model=PaginatedResponse[AutorRead],
+    status_code=status.HTTP_200_OK,
+)
+@public_router.get(
+    "/",
+    response_model=PaginatedResponse[AutorRead],
+    status_code=status.HTTP_200_OK,
+    include_in_schema=False,
+)
+async def get_autores_list(
+    params: PaginationParams = Depends(),
+    uow: AutoresUnitOfWork = Depends(get_autores_uow),
+) -> PaginatedResponse[AutorRead]:
+    """Lista autores paginados con envoltorio uniforme (abierto al público)."""
+    return await list_autores(uow=uow, params=params)
+
+
+@public_router.get(
+    "/{autor_id}/libros",
+    response_model=PaginatedResponse[AutorLibroItem],
+    status_code=status.HTTP_200_OK,
+)
+async def get_autores_libros(
+    autor_id: int,
+    params: PaginationParams = Depends(),
+    uow: AutoresUnitOfWork = Depends(get_autores_uow),
+) -> PaginatedResponse[AutorLibroItem]:
+    """Lista los libros activos pertenecientes a un autor con rol y orden (abierto al público)."""
+    return await list_libros_by_autor(uow=uow, autor_id=autor_id, params=params)
+
+
+# --- Rutas Protegidas (Exigen ADMIN) ---
+
+
+@protected_router.post(
+    "",
+    response_model=AutorRead,
+    status_code=status.HTTP_201_CREATED,
+)
+@protected_router.post(
+    "/",
+    response_model=AutorRead,
+    status_code=status.HTTP_201_CREATED,
+    include_in_schema=False,
+)
 async def post_autor(
     payload: AutorCreate,
-    session: SessionDep,
+    uow: AutoresUnitOfWork = Depends(get_autores_uow),
 ) -> AutorRead:
-    """Crea un nuevo autor."""
-    return await create_autor(session, payload)
+    """Crea un nuevo autor (ADMIN)."""
+    return await create_autor(uow=uow, payload=payload)
 
 
-@router.get("/{autor_id}")
-async def get_autor_by_id(
-    autor_id: AutorIdPath,
-    session: SessionDep,
+@protected_router.get(
+    "/{autor_id}",
+    response_model=AutorRead,
+    status_code=status.HTTP_200_OK,
+)
+async def get_autor_detail(
+    autor_id: int,
+    uow: AutoresUnitOfWork = Depends(get_autores_uow),
 ) -> AutorRead:
-    """Obtiene el detalle de un autor por su identificador."""
-    return await get_autor(session, autor_id)
+    """Obtiene el detalle de un autor (ADMIN)."""
+    return await get_autor(uow=uow, autor_id=autor_id)
 
 
-@router.patch("/{autor_id}")
+@protected_router.patch(
+    "/{autor_id}",
+    response_model=AutorRead,
+    status_code=status.HTTP_200_OK,
+)
 async def patch_autor(
-    autor_id: AutorIdPath,
+    autor_id: int,
     payload: AutorUpdate,
-    session: SessionDep,
+    uow: AutoresUnitOfWork = Depends(get_autores_uow),
 ) -> AutorRead:
-    """Actualiza parcialmente un autor existente."""
-    return await update_autor(session, autor_id, payload)
+    """Actualiza parcialmente un autor (ADMIN)."""
+    return await update_autor(uow=uow, autor_id=autor_id, payload=payload)
 
 
-@router.get("/{autor_id}/libros")
-async def get_libros_by_autor(
-    autor_id: AutorIdPath,
-    session: SessionDep,
-    pagination: PaginationParams = Depends(get_pagination_params),
-) -> list[AutorLibroItem]:
-    """Lista los libros asociados a un autor con rol y orden de forma paginada (RN-10)."""
-    return await list_libros_by_autor(session, autor_id, limit=pagination.limit, offset=pagination.offset)
+# Router combinado para compatibilidad
+router = APIRouter()
+router.include_router(public_router)
+router.include_router(protected_router)

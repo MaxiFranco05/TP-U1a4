@@ -1,36 +1,50 @@
-### Create autor - success (201)
-POST http://localhost:8000/autores/
+### Configuración de Token para Rutas Protegidas (ADMIN)
+@admin_token = rellenar_con_token_jwt_admin
+
+### Create autor - success (201, ADMIN)
+POST http://localhost:8000/autores
 Content-Type: application/json
+Cookie: access_token={{admin_token}}
 
 {
   "nombre": "Gabriel García Márquez",
   "nacionalidad": "Colombiana"
 }
 
-### Get autor by id - success (200)
+### List autores - default pagination (200, Público)
+GET http://localhost:8000/autores
+
+### List autores - custom pagination (200, Público)
+GET http://localhost:8000/autores?page=1&size=10
+
+### Get autor by id - success (200, ADMIN)
 GET http://localhost:8000/autores/1
+Cookie: access_token={{admin_token}}
 
-### Get autor by id - not found (404)
+### Get autor by id - not found (404, ADMIN)
 GET http://localhost:8000/autores/999
+Cookie: access_token={{admin_token}}
 
-### Update autor - success (200)
+### Update autor - success (200, ADMIN)
 PATCH http://localhost:8000/autores/1
 Content-Type: application/json
+Cookie: access_token={{admin_token}}
 
 {
   "nacionalidad": "Colombiana/Mexicana"
 }
 
-### Update autor - not found (404)
+### Update autor - not found (404, ADMIN)
 PATCH http://localhost:8000/autores/999
 Content-Type: application/json
+Cookie: access_token={{admin_token}}
 
 {
   "nombre": "Inexistente"
 }
 
-### Get libros by autor - success (200)
-GET http://localhost:8000/autores/1/libros
+### Get libros by autor - success (200, Público)
+GET http://localhost:8000/autores/1/libros?page=1&size=10
 
-### Get libros by autor - not found (404)
+### Get libros by autor - not found (404, Público)
 GET http://localhost:8000/autores/999/libros

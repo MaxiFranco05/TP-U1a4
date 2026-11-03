@@ -1,6 +1,8 @@
 """Esquemas DTO del módulo autores."""
 
-from pydantic import field_validator
+from decimal import Decimal
+
+from pydantic import ConfigDict, field_validator
 from sqlmodel import SQLModel
 
 
@@ -14,6 +16,8 @@ def _validate_non_empty_nombre(value: str) -> str:
 class AutorCreate(SQLModel):
     """DTO de entrada para la creación de un autor (sin id)."""
 
+    model_config = ConfigDict(extra="forbid")
+
     nombre: str
     nacionalidad: str | None = None
 
@@ -25,6 +29,8 @@ class AutorCreate(SQLModel):
 
 class AutorUpdate(SQLModel):
     """DTO de entrada para actualización parcial (PATCH) de un autor."""
+
+    model_config = ConfigDict(extra="forbid")
 
     nombre: str | None = None
     nacionalidad: str | None = None
@@ -40,6 +46,8 @@ class AutorUpdate(SQLModel):
 class AutorRead(SQLModel):
     """DTO de salida para lectura de un autor."""
 
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
     id: int
     nombre: str
     nacionalidad: str | None
@@ -48,10 +56,12 @@ class AutorRead(SQLModel):
 class AutorLibroItem(SQLModel):
     """DTO de salida para libros listados por autor (incluye rol y orden)."""
 
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
     id: int
     isbn: str
     titulo: str
-    precio: float
+    precio: Decimal
     stock: int
     editorial_id: int
     genero_id: int | None
