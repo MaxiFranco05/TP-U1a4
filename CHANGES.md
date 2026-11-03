@@ -38,7 +38,7 @@ C-08 [x]
         ├── C-10 modelos-acceso-stock-y-migraciones-003-004 [Bloque 1: Maxi]
         └── C-11 core-repositories-uow-y-paginacion         [Bloque 1: Maxi]
               │
-              ├── C-12 security-bcrypt-jwt-y-dependencies   [Bloque 2: Andrés]
+              ├── C-12 security-bcrypt-jwt-y-dependencies [x]   [Bloque 2: Andrés]
               │     └── C-13 auth-registro-login-y-cambio-password [Bloque 2: Andrés]
               │           ├── C-14 usuarios-roles-vigencia-y-eventos [Bloque 2: Andrés]
               │           │
@@ -366,7 +366,7 @@ Paso │ Maxi (Bloque 1: Base y Datos)        │ Andrés (Bloque 2: Auth y Role
 
 ### [C-12] `security-bcrypt-jwt-y-dependencies`
 - **Responsable**: **Andrés** (Bloque 2 — Change 1/3)
-- **Estado**: `[ ]` pendiente
+- **Estado**: `[x]` completado
 - **Scope**: Criptografía `bcrypt` fuera del bucle con semáforo, JWT y dependencias de autenticación/autorización con sesión compartida (Ej. 4 base y Ej. 5 base)
   - `app/core/security.py`:
     - Hash y verificación de contraseñas con `bcrypt` usando el costo `settings.BCRYPT_ROUNDS`, ejecutados siempre fuera del bucle de eventos con `asyncio.to_thread` y protegidos bajo un `asyncio.Semaphore` global.

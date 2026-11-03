@@ -5,10 +5,11 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 import bcrypt
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, Depends, FastAPI
 
 from app.core.config import get_settings
 from app.core.database import build_engine, build_session_factory
+from app.core.dependencies import verificar_password_cambiada
 from app.modules.autores import models as _autores_models  # noqa: F401
 from app.modules.autores.router import router as autores_router
 from app.modules.clientes import models as _clientes_models  # noqa: F401
@@ -64,7 +65,7 @@ def _build_route_groups() -> tuple[APIRouter, APIRouter]:
       cambio obligatorio de contraseña (debe_cambiar_password).
     """
     open_group = APIRouter()
-    protected_group = APIRouter(dependencies=[])
+    protected_group = APIRouter(dependencies=[Depends(verificar_password_cambiada)])
 
     open_group.include_router(health_router)
 
