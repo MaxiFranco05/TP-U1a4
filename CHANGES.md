@@ -390,7 +390,7 @@ Paso │ Maxi (Bloque 1: Base y Datos)        │ Andrés (Bloque 2: Auth y Role
 
 ### [C-13] `auth-registro-login-y-cambio-password`
 - **Responsable**: **Andrés** (Bloque 2 — Change 2/3)
-- **Estado**: `[ ]` pendiente
+- **Estado**: `[x]` completado
 - **Scope**: Repositorios/UoW de `usuarios` y endpoints de `/auth` (`registro`, `login`, `logout`, `yo`, `cambiar-password`) (Ej. 4, Ej. 6 RN-02/RN-16 y Ej. 7 `intento_acceso`)
   - `app/modules/usuarios/repository.py` y `app/modules/usuarios/unit_of_work.py`:
     - Repositorios para `Usuario`, `AsignacionRol`, `IntentoAcceso` y `EventoSeguridad`; `UsuariosUnitOfWork` que compone también `ClienteRepository` para el auto-registro con la misma sesión.

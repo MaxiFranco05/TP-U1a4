@@ -19,6 +19,8 @@ from app.modules.editoriales.router import router as editoriales_router
 from app.modules.generos import models as _generos_models  # noqa: F401
 from app.modules.generos.router import router as generos_router
 from app.modules.health.router import router as health_router
+from app.modules.usuarios import models as _usuarios_models  # noqa: F401
+from app.modules.usuarios.router import router as auth_router
 from app.modules.libros import models as _libros_models  # noqa: F401
 from app.modules.libros.router import router as libros_router
 from app.modules.ventas import models as _ventas_models  # noqa: F401
@@ -50,6 +52,7 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
     application.state.settings = settings
     application.state.engine = engine
     application.state.session_factory = session_factory
+    application.state.session_maker = session_factory
     application.state.dummy_password_hash = dummy_password_hash
     try:
         yield
@@ -68,6 +71,7 @@ def _build_route_groups() -> tuple[APIRouter, APIRouter]:
     protected_group = APIRouter(dependencies=[Depends(verificar_password_cambiada)])
 
     open_group.include_router(health_router)
+    open_group.include_router(auth_router)
 
     protected_group.include_router(editoriales_router)
     protected_group.include_router(generos_router)
