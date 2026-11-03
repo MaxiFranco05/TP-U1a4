@@ -12,9 +12,13 @@ from sqlalchemy.ext.asyncio import (
 )
 
 
-def build_engine(database_url: str, sql_echo: bool = False) -> AsyncEngine:
-    """Construye el motor asincrónico de SQLAlchemy 2.0."""
-    return create_async_engine(database_url, echo=sql_echo)
+def build_engine(
+    database_url: str,
+    sql_echo: bool = False,
+    pool_size: int = 5,
+) -> AsyncEngine:
+    """Construye el motor asincrónico de SQLAlchemy 2.0 configurado con pool_size."""
+    return create_async_engine(database_url, echo=sql_echo, pool_size=pool_size)
 
 
 def build_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:

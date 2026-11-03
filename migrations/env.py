@@ -22,7 +22,7 @@ if config.config_file_name is not None:
 
 # Inyectar DATABASE_URL desde el entorno (sin contraseñas en alembic.ini)
 settings = get_settings()
-config.set_main_option("sqlalchemy.url", settings.database_url)
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 target_metadata = SQLModel.metadata
 

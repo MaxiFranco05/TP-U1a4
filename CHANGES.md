@@ -290,7 +290,7 @@ Paso │ Maxi (Bloque 1: Base y Datos)        │ Andrés (Bloque 2: Auth y Role
 
 ### [C-09] `parcial-config-y-lifespan`
 - **Responsable**: **Maxi** (Bloque 1 — Change 1/3)
-- **Estado**: `[ ]` pendiente
+- **Estado**: `[x]` completado
 - **Scope**: Configuración tipada con `pydantic-settings`, ciclo de vida con hash ficticio y dos grupos de rutas (Ej. 1 — 6%)
   - `requirements.txt` y `env.example`: agregar `pydantic-settings>=2.0`, `bcrypt>=4.0`, `PyJWT>=2.8`; documentar `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_HOST`, `POSTGRES_PORT`, `JWT_SECRET`, `JWT_EXPIRATION_SECONDS`, `BCRYPT_ROUNDS`, `COOKIE_SECURE`, `DB_POOL_SIZE`, `SQL_ECHO` sin secretos reales.
   - `app/core/config.py`: clase `Settings(BaseSettings)` que lee del entorno / `.env` y arma `DATABASE_URL` con `@computed_field` (`postgresql+asyncpg://...`). Ni `POSTGRES_PASSWORD` ni `JWT_SECRET` tienen valor por defecto en el código (si faltan, la aplicación no arranca).
