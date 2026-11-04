@@ -1,6 +1,7 @@
 """Tests bajo Strict TDD para C-12: Criptografía bcrypt, JWT y dependencias de autenticación/autorización."""
 
 import pytest
+from typing import Any
 
 
 class TestValidarLongitudPassword:

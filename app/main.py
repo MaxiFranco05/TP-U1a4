@@ -40,7 +40,10 @@ from app.modules.libros.router import (
     public_router as libros_public_router,
 )
 from app.modules.ventas import models as _ventas_models  # noqa: F401
-from app.modules.ventas.router import router as ventas_router
+from app.modules.ventas.router import (
+    mis_ventas_router,
+    router as ventas_router,
+)
 
 
 def _generate_dummy_password_hash(rounds: int) -> bytes:
@@ -124,8 +127,12 @@ def _build_route_groups() -> tuple[APIRouter, APIRouter]:
     )
 
     # Rutas de clientes y ventas
-    protected_group.include_router(clientes_router)
+    protected_group.include_router(
+        clientes_router,
+        dependencies=[Depends(requiere_rol("VENDEDOR", "ADMIN"))],
+    )
     protected_group.include_router(ventas_router)
+    protected_group.include_router(mis_ventas_router)
     return open_group, protected_group
 
 

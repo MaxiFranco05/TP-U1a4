@@ -1,162 +1,217 @@
-"""Lógica de negocio del módulo ventas."""
+"""Lógica de negocio del módulo ventas sobre UnitOfWork."""
 
 import asyncio
-import logging
 from decimal import Decimal
-from typing import TYPE_CHECKING
+import logging
 
-from fastapi import BackgroundTasks
-from sqlalchemy import select
+from fastapi import HTTPException, status
 from sqlalchemy.exc import DBAPIError, IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload, selectinload
 
 from app.core.exceptions import translate_integrity_error
-from app.core.pagination import PaginationParams
+from app.core.paginacion import PaginatedResponse, calcular_paginas, validar_pagina
 from app.modules.libros.models import Libro
+from app.modules.usuarios.models import Usuario
+from app.modules.usuarios.repository import AsignacionRolRepository
 from app.modules.ventas.models import RenglonVenta, Venta
-from app.modules.ventas.schemas import RenglonVentaCreate, VentaCreate, VentaListItem, VentaRead
-
-if TYPE_CHECKING:
-    from app.modules.clientes.models import Cliente
+from app.modules.ventas.schemas import (
+    RenglonVentaCreate,
+    VentaCreate,
+    VentaListItem,
+    VentaRead,
+)
+from app.modules.ventas.unit_of_work import VentasUnitOfWork
 
 logger = logging.getLogger(__name__)
 
 
 async def _notificar_comprobante(venta_id: int) -> None:
-    """Notificación de comprobante en segundo plano (simulada)."""
+    """Notificación de comprobante en segundo plano (simulada) tras confirmar la transacción (RN-08)."""
     await asyncio.sleep(0.5)
     logger.info("Comprobante generado para venta %d", venta_id)
 
 
 async def crear_venta(
-    session: AsyncSession,
+    uow: VentasUnitOfWork,
     data: VentaCreate,
-    background_tasks: BackgroundTasks,
+    usuario_actual_id: int,
 ) -> VentaRead:
+    """Crea una venta con sus renglones en una transacción atómica con descuento de stock (RN-11).
+
+    1. Carga libros activos con FOR UPDATE en orden de libro_id para evitar deadlocks (RN-11).
+    2. Si algún libro no existe o está dado de baja lógica, responde 409 sin escrituras.
+    3. Verifica stock suficiente para cada renglón antes de escribir; si no alcanza responde 409.
+    4. Copia precio_unitario del catálogo y calcula total en Decimal (RN-06, RN-07).
+    5. Persiste Venta y RenglonVenta con flush (delega existencia de cliente a la FK).
+    6. Descuenta stock por renglón invocando el punto único de stock con movimiento negativo.
+    7. Si cualquier paso falla, el UoW revierte todo automáticamente.
     """
-    Crea una venta con sus renglones en una transacción atómica.
+    async with uow:
+        # 1. Bloquear libros en orden ascendente de ID
+        libro_ids = sorted({r.libro_id for r in data.renglones})
+        libros_dict: dict[int, Libro] = {}
+        for lid in libro_ids:
+            libro = await uow.libros.get_by_id_for_update(lid)
+            if libro is None:
+                deleted = await uow.libros.get_by_id_including_deleted(lid)
+                if deleted is not None and deleted.borrado_en is not None:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="El libro referenciado fue dado de baja",
+                    )
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="El libro referenciado no existe",
+                )
+            libros_dict[lid] = libro
 
-    - Copia el precio del libro al momento de la venta (RN-06)
-    - Calcula el total server-side (RN-07)
-    - Programa notificación en background (RN-08)
-    - Traduce errores de FK a 409 controlado (RN-12, DD-04)
+        # 2. Validar stock suficiente
+        for r in data.renglones:
+            libro = libros_dict[r.libro_id]
+            if libro.stock < r.cantidad:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        f"Stock insuficiente para el libro '{libro.titulo}' "
+                        f"(disponible: {libro.stock}, solicitado: {r.cantidad})"
+                    ),
+                )
+
+        # 3. Construir renglones copiando precio_unitario y calcular total Decimal
+        total = Decimal("0.00")
+        renglones_models: list[RenglonVenta] = []
+        for r in data.renglones:
+            libro = libros_dict[r.libro_id]
+            precio_unitario = libro.precio
+            subtotal = Decimal(str(r.cantidad)) * precio_unitario
+            total += subtotal
+            renglones_models.append(
+                RenglonVenta(
+                    libro_id=libro.id,
+                    cantidad=r.cantidad,
+                    precio_unitario=precio_unitario,
+                )
+            )
+
+        # 4. Crear venta con renglones
+        venta = Venta(
+            cliente_id=data.cliente_id,
+            total=total,
+            renglones=renglones_models,
+        )
+        try:
+            await uow.ventas.add(venta)
+        except (IntegrityError, DBAPIError) as exc:
+            raise translate_integrity_error(exc) from exc
+
+        # 5. Descontar stock por renglón mediante el punto único
+        for r in data.renglones:
+            libro = libros_dict[r.libro_id]
+            try:
+                await uow.registrar_movimiento_stock(
+                    libro=libro,
+                    cantidad=-r.cantidad,
+                    motivo=f"Venta #{venta.id}",
+                    usuario_id=usuario_actual_id,
+                    venta_id=venta.id,
+                )
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=str(exc),
+                ) from exc
+
+        # Precargar detalle completo para la respuesta antes de confirmar
+        venta_completa = await uow.ventas.get_detalle(venta.id)
+        if venta_completa is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Venta no encontrada",
+            )
+        return VentaRead.model_validate(venta_completa)
+
+
+async def obtener_venta_autorizada(
+    uow: VentasUnitOfWork,
+    venta_id: int,
+    usuario_actual: Usuario,
+) -> VentaRead:
+    """Obtiene el detalle de una venta con autorización de dueño o personal (RN-14).
+
+    1. Busca la venta con precarga de cliente, renglones y libros. Si no existe -> 404.
+    2. Comprueba si el usuario tiene rol vigente ADMIN o VENDEDOR en la base de datos (RN-04).
+    3. Si no es personal, comprueba que venta.cliente.usuario_id == usuario_actual.id.
+    4. Si no coincide, responde 403 Forbidden.
     """
-    # 1. Extraer IDs de libros únicos
-    libro_ids = {r.libro_id for r in data.renglones}
+    async with uow:
+        venta = await uow.ventas.get_detalle(venta_id)
+        if venta is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Venta no encontrada",
+            )
 
-    # 2. Cargar todos los libros en una sola query (evita N+1)
-    stmt_libros = select(Libro).where(Libro.id.in_(libro_ids))
-    result_libros = await session.execute(stmt_libros)
-    libros = result_libros.scalars().all()
+        # Consultar roles vigentes en la base de datos
+        asignaciones_repo = AsignacionRolRepository(session=uow.session)
+        roles_vigentes = await asignaciones_repo.get_roles_vigentes_usuario(usuario_actual.id)
+        es_personal = bool(set(roles_vigentes).intersection({"ADMIN", "VENDEDOR"}))
 
-    # 3. Validar que todos los libros existen (lectura para obtener precios)
-    libros_dict = {libro.id: libro for libro in libros}
-    missing_libros = [lid for lid in libro_ids if lid not in libros_dict]
-    if missing_libros:
-        # Lanzar error controlado para libro no encontrado (RN-12)
-        from fastapi import HTTPException, status
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="El libro referenciado no existe"
+        es_duenio = bool(
+            venta.cliente
+            and venta.cliente.usuario_id is not None
+            and venta.cliente.usuario_id == usuario_actual.id
         )
 
-    # 4. Construir renglones con precio_unitario copiado del libro
-    renglones_models = []
-    total = Decimal("0")
-    for renglon_data in data.renglones:
-        libro = libros_dict[renglon_data.libro_id]
-        precio_unitario = libro.precio
-        subtotal = Decimal(str(renglon_data.cantidad)) * precio_unitario
-        total += subtotal
+        if not es_personal and not es_duenio:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No posee los permisos para consultar esta venta.",
+            )
 
-        renglon = RenglonVenta(
-            libro_id=renglon_data.libro_id,
-            cantidad=renglon_data.cantidad,
-            precio_unitario=precio_unitario,
-        )
-        renglones_models.append(renglon)
-
-    # 5. Crear venta con renglones
-    venta = Venta(
-        cliente_id=data.cliente_id,
-        total=total,
-        renglones=renglones_models,
-    )
-    session.add(venta)
-
-    # 6. Flush para obtener IDs antes del commit (puede lanzar errores de FK)
-    try:
-        await session.flush()
-    except (IntegrityError, DBAPIError) as exc:
-        await session.rollback()
-        raise translate_integrity_error(exc) from exc
-
-    # 7. Programar notificación en background (después del flush, antes del commit)
-    background_tasks.add_task(_notificar_comprobante, venta.id)
-
-    # 8. Commit y manejar errores de integridad
-    try:
-        await session.commit()
-    except (IntegrityError, DBAPIError) as exc:
-        await session.rollback()
-        raise translate_integrity_error(exc) from exc
-
-    # 9. Recargar con eager loading para el response
-    stmt = (
-        select(Venta)
-        .where(Venta.id == venta.id)
-        .options(
-            joinedload(Venta.cliente),
-            selectinload(Venta.renglones).joinedload(RenglonVenta.libro),
-        )
-    )
-    result = await session.execute(stmt)
-    venta_completa = result.unique().scalar_one()
-
-    return VentaRead.model_validate(venta_completa)
-
-
-async def obtener_venta(session: AsyncSession, venta_id: int) -> VentaRead | None:
-    """
-    Obtiene una venta por ID con eager loading fijo (1 query).
-
-    Usa joinedload para cliente (to-one) y selectinload para renglones+libro (colección).
-    """
-    stmt = (
-        select(Venta)
-        .where(Venta.id == venta_id)
-        .options(
-            joinedload(Venta.cliente),
-            selectinload(Venta.renglones).joinedload(RenglonVenta.libro),
-        )
-    )
-    result = await session.execute(stmt)
-    venta = result.unique().scalar_one_or_none()
-
-    if venta is None:
-        return None
-
-    return VentaRead.model_validate(venta)
+        return VentaRead.model_validate(venta)
 
 
 async def listar_ventas(
-    session: AsyncSession,
-    pagination: PaginationParams,
-) -> list[VentaListItem]:
-    """
-    Lista ventas paginadas con cliente cargado (joinedload).
+    uow: VentasUnitOfWork,
+    page: int = 1,
+    size: int = 20,
+) -> PaginatedResponse[VentaListItem]:
+    """Lista ventas paginadas con envoltorio uniforme para el personal (RN-10, RN-13)."""
+    async with uow:
+        total = await uow.ventas.count()
+        pages = calcular_paginas(total, size)
+        validar_pagina(page, pages)
+        ventas = await uow.ventas.listar(offset=(page - 1) * size, limit=size)
+        items = [VentaListItem.model_validate(v) for v in ventas]
+        return PaginatedResponse(
+            items=items,
+            total=total,
+            page=page,
+            size=size,
+            pages=pages,
+        )
 
-    No carga renglones para evitar N+1 en listado (US-031).
-    """
-    stmt = (
-        select(Venta)
-        .options(joinedload(Venta.cliente))
-        .order_by(Venta.fecha.desc())
-        .limit(pagination.limit)
-        .offset(pagination.offset)
-    )
-    result = await session.execute(stmt)
-    ventas = result.unique().scalars().all()
 
-    return [VentaListItem.model_validate(v) for v in ventas]
+async def listar_mis_ventas(
+    uow: VentasUnitOfWork,
+    usuario_actual_id: int,
+    page: int = 1,
+    size: int = 20,
+) -> PaginatedResponse[VentaListItem]:
+    """Lista las ventas del cliente asociado al usuario actual (RN-14)."""
+    async with uow:
+        total = await uow.ventas.count_por_usuario(usuario_actual_id)
+        pages = calcular_paginas(total, size)
+        validar_pagina(page, pages)
+        ventas = await uow.ventas.listar_por_usuario(
+            usuario_id=usuario_actual_id,
+            offset=(page - 1) * size,
+            limit=size,
+        )
+        items = [VentaListItem.model_validate(v) for v in ventas]
+        return PaginatedResponse(
+            items=items,
+            total=total,
+            page=page,
+            size=size,
+            pages=pages,
+        )

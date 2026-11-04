@@ -14,6 +14,8 @@ if TYPE_CHECKING:
 class RenglonVentaCreate(SQLModel):
     """DTO de entrada para la creación de un renglón de venta."""
 
+    model_config = {"extra": "forbid"}
+
     libro_id: int = Field(ge=1, description="ID del libro")
     cantidad: int = Field(gt=0, description="Cantidad debe ser positiva")
 
@@ -27,6 +29,8 @@ class RenglonVentaCreate(SQLModel):
 
 class VentaCreate(SQLModel):
     """DTO de entrada para la creación de una venta con renglones."""
+
+    model_config = {"extra": "forbid"}
 
     cliente_id: int = Field(ge=1, description="ID del cliente")
     renglones: Annotated[list[RenglonVentaCreate], Field(min_length=1, description="Al menos un renglón")]

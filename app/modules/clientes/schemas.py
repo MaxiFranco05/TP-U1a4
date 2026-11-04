@@ -7,6 +7,8 @@ from sqlmodel import SQLModel
 class ClienteCreate(SQLModel):
     """DTO de entrada para la creación de un cliente (sin id)."""
 
+    model_config = {"extra": "forbid"}
+
     nombre: str
     email: EmailStr
 
@@ -21,6 +23,8 @@ class ClienteCreate(SQLModel):
 
 class ClienteUpdate(SQLModel):
     """DTO de entrada para actualización parcial (PATCH) de un cliente."""
+
+    model_config = {"extra": "forbid"}
 
     nombre: str | None = None
     email: EmailStr | None = None
@@ -38,6 +42,8 @@ class ClienteUpdate(SQLModel):
 
 class PerfilClienteCreate(SQLModel):
     """DTO de entrada para la creación de un perfil de cliente."""
+
+    model_config = {"extra": "forbid"}
 
     telefono: str
     direccion: str

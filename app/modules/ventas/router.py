@@ -1,50 +1,115 @@
-"""Router HTTP del módulo ventas."""
+"""Router HTTP del módulo ventas y mis-ventas."""
 
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Path, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import SessionDep
-from app.core.pagination import PaginationParams, get_pagination_params
-from app.modules.ventas.schemas import VentaCreate, VentaListItem, VentaRead
-from app.modules.ventas.service import crear_venta, listar_ventas, obtener_venta
+from app.core.database import get_session
+from app.core.dependencies import get_usuario_actual, requiere_rol
+from app.core.paginacion import PaginatedResponse, PaginationParams
+from app.modules.usuarios.models import Usuario
+from app.modules.ventas.schemas import (
+    VentaCreate,
+    VentaListItem,
+    VentaRead,
+)
+from app.modules.ventas.service import (
+    _notificar_comprobante,
+    crear_venta,
+    listar_mis_ventas,
+    listar_ventas,
+    obtener_venta_autorizada,
+)
+from app.modules.ventas.unit_of_work import VentasUnitOfWork
+
+
+def get_ventas_uow(
+    session: AsyncSession = Depends(get_session),
+) -> VentasUnitOfWork:
+    """Provee una instancia de VentasUnitOfWork compartiendo la sesión de la petición."""
+    return VentasUnitOfWork(session=session)
+
 
 router = APIRouter(prefix="/ventas", tags=["ventas"])
+mis_ventas_router = APIRouter(prefix="/mis-ventas", tags=["ventas"])
 
 VentaIdPath = Annotated[int, Path(ge=1)]
 
 
 @router.post(
-    "/",
+    "",
     status_code=status.HTTP_201_CREATED,
     response_model=VentaRead,
 )
+@router.post(
+    "/",
+    status_code=status.HTTP_201_CREATED,
+    response_model=VentaRead,
+    include_in_schema=False,
+)
 async def post_venta(
     payload: VentaCreate,
-    session: SessionDep,
     background_tasks: BackgroundTasks,
+    uow: VentasUnitOfWork = Depends(get_ventas_uow),
+    usuario_actual: Usuario = Depends(requiere_rol("VENDEDOR", "ADMIN")),
 ) -> VentaRead:
-    """Crea una nueva venta con renglones (US-030)."""
-    return await crear_venta(session, payload, background_tasks)
+    """Crea una nueva venta con descuento atómico de stock (RN-11)."""
+    venta = await crear_venta(uow, payload, usuario_actual_id=usuario_actual.id)
+    background_tasks.add_task(_notificar_comprobante, venta.id)
+    return venta
+
+
+@router.get(
+    "",
+    response_model=PaginatedResponse[VentaListItem],
+    status_code=status.HTTP_200_OK,
+)
+@router.get(
+    "/",
+    response_model=PaginatedResponse[VentaListItem],
+    status_code=status.HTTP_200_OK,
+    include_in_schema=False,
+)
+async def get_ventas(
+    uow: VentasUnitOfWork = Depends(get_ventas_uow),
+    pagination: PaginationParams = Depends(),
+    usuario_actual: Usuario = Depends(requiere_rol("VENDEDOR", "ADMIN")),
+) -> PaginatedResponse[VentaListItem]:
+    """Lista ventas de forma paginada para el personal (RN-10, RN-13)."""
+    return await listar_ventas(uow, page=pagination.page, size=pagination.size)
 
 
 @router.get("/{venta_id}", response_model=VentaRead)
 async def get_venta(
     venta_id: VentaIdPath,
-    session: SessionDep,
+    uow: VentasUnitOfWork = Depends(get_ventas_uow),
+    usuario_actual: Usuario = Depends(get_usuario_actual),
 ) -> VentaRead:
-    """Obtiene el detalle de una venta por su identificador (eager loading fijo)."""
-    venta = await obtener_venta(session, venta_id)
-    if venta is None:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Venta no encontrada")
-    return venta
+    """Obtiene el detalle de una venta con autorización de dueño o personal (RN-14)."""
+    return await obtener_venta_autorizada(uow, venta_id, usuario_actual)
 
 
-@router.get("/", response_model=list[VentaListItem])
-async def get_ventas(
-    session: SessionDep,
-    pagination: PaginationParams = Depends(get_pagination_params),
-) -> list[VentaListItem]:
-    """Lista ventas de forma paginada (RN-10)."""
-    return await listar_ventas(session, pagination)
+@mis_ventas_router.get(
+    "",
+    response_model=PaginatedResponse[VentaListItem],
+    status_code=status.HTTP_200_OK,
+)
+@mis_ventas_router.get(
+    "/",
+    response_model=PaginatedResponse[VentaListItem],
+    status_code=status.HTTP_200_OK,
+    include_in_schema=False,
+)
+async def get_mis_ventas(
+    uow: VentasUnitOfWork = Depends(get_ventas_uow),
+    pagination: PaginationParams = Depends(),
+    usuario_actual: Usuario = Depends(get_usuario_actual),
+) -> PaginatedResponse[VentaListItem]:
+    """Lista las ventas del cliente asociado al usuario actual (RN-14)."""
+    return await listar_mis_ventas(
+        uow,
+        usuario_actual_id=usuario_actual.id,
+        page=pagination.page,
+        size=pagination.size,
+    )

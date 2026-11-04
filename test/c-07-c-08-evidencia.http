@@ -4,15 +4,20 @@
 > Luego correr: `alembic upgrade head` y luego `python seed_db.py`
 > Base: postgresql+asyncpg://user:password@localhost:5433/libreria
 
+@admin_cookie = access_token=PONER_TOKEN_ADMIN_AQUI
+@vendedor_cookie = access_token=PONER_TOKEN_VENDEDOR_AQUI
+
 # ---- C-07: Lecturas sin N+1 - Eager loading declarado ----
 
 # Configurar SQL_ECHO=true para ver las consultas
 # GET /ventas/ paginado con cliente cargado (joinedload) - sin renglones en listado (US-031)
 GET http://localhost:8000/ventas/
+Cookie: {{vendedor_cookie}}
 
 ### C-07: Verificar que GET /ventas/{id} carga cliente y renglones con eager loading fijo
 # Usando joinedload para cliente (relación to-one) y selectinload para renglones+libro (colección)
 GET http://localhost:8000/ventas/1
+Cookie: {{vendedor_cookie}}
 
 ### C-07: Verificar estrategia de carga en GET /libros/{id}
 # Usa joinedload editorial, genero y selectinload autorías (DD-05, cero lazy loading)
@@ -47,6 +52,7 @@ GET http://localhost:8000/health/ready
 ### 3. Verificar C-02: Constraints y unicidad
 # ISBN repetido → 409
 POST http://localhost:8000/libros/
+Cookie: {{admin_cookie}}
 Content-Type: application/json
 
 {
@@ -68,6 +74,7 @@ Content-Type: application/json
 
 # Email cliente repetido → 409 (RN-02)
 POST http://localhost:8000/clientes/
+Cookie: {{vendedor_cookie}}
 Content-Type: application/json
 
 {
@@ -89,6 +96,7 @@ GET http://localhost:8000/libros/?titulo=nonexistent title
 ### 6. Verificar C-05: Clientes y perfil único
 # Crear segundo perfil para mismo cliente → 409 (RN-09, C-03 de los casos)
 POST http://localhost:8000/clientes/1/perfil
+Cookie: {{vendedor_cookie}}
 Content-Type: application/json
 
 {
@@ -98,8 +106,9 @@ Content-Type: application/json
 ### Expected: 409 (máximo un perfil por cliente)
 
 ### 7. Verificar C-06: Alta de venta con renglones
-# Venta feliz path con 2 renglones
+# Venta feliz path con 2 renglones (descuenta stock)
 POST http://localhost:8000/ventas/
+Cookie: {{vendedor_cookie}}
 Content-Type: application/json
 
 {
@@ -115,10 +124,11 @@ Content-Type: application/json
     }
   ]
 }
-### Expected: 201 con total calculado correctamente
+### Expected: 201 con total calculado correctamente y stock descontado
 
 # Venta con renglones vacíos → 422
 POST http://localhost:8000/ventas/
+Cookie: {{vendedor_cookie}}
 Content-Type: application/json
 
 {
@@ -129,6 +139,7 @@ Content-Type: application/json
 
 # Venta con libro inexistente → 409
 POST http://localhost:8000/ventas/
+Cookie: {{vendedor_cookie}}
 Content-Type: application/json
 
 {
@@ -144,6 +155,7 @@ Content-Type: application/json
 
 # Venta con cliente inexistente → 409
 POST http://localhost:8000/ventas/
+Cookie: {{vendedor_cookie}}
 Content-Type: application/json
 
 {

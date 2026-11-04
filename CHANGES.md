@@ -43,7 +43,7 @@ C-08 [x]
               │           ├── C-14 usuarios-roles-vigencia-y-eventos [x]   [Bloque 2: Andrés]
               │           │
               │           └── C-15 catalogo-uow-borrado-logico-y-stock [x]   [Bloque 3: Octavio]
-              │                 └── C-16 clientes-y-ventas-uow-stock-y-autorizacion [Bloque 3: Octavio]
+              │                 └── C-16 clientes-y-ventas-uow-stock-y-autorizacion [x]   [Bloque 3: Octavio]
               │                       └── C-17 seed-casos-prueba-y-despliegue-docker [Bloque 3: Octavio]
 ```
 
@@ -480,7 +480,7 @@ Paso │ Maxi (Bloque 1: Base y Datos)        │ Andrés (Bloque 2: Auth y Role
 
 ### [C-16] `clientes-y-ventas-uow-stock-y-autorizacion`
 - **Responsable**: **Octavio** (Bloque 3 — Change 2/3)
-- **Estado**: [ ] pendiente
+- **Estado**: [x] completado
 - **Scope**: Refactor de `clientes` y `ventas` a `Repository` + `UnitOfWork`, venta atómica con descuento de stock y movimientos, autorización de dueño y consultas sin N+1 (Ej. 5 RN-14, Ej. 6 RN-10/RN-11, Ej. 8)
   - En `app/modules/clientes/`:
     - `repository.py` (`ClienteRepository`, `PerfilClienteRepository` con precarga de `perfil` y `usuario` declarada en el repositorio) y `unit_of_work.py` (`ClientesUnitOfWork`).

@@ -1,5 +1,10 @@
+### Autenticación previa requerida (VENDEDOR o ADMIN)
+# Para ejecutar estas peticiones, primero autenticarse vía POST /auth/login y usar la cookie access_token resultante.
+@auth_cookie = access_token=PONER_TOKEN_VENDEDOR_AQUI
+
 ### Create cliente - success (201)
 POST http://localhost:8000/clientes/
+Cookie: {{auth_cookie}}
 Content-Type: application/json
 
 {
@@ -9,6 +14,7 @@ Content-Type: application/json
 
 ### Create cliente - duplicate email (409)
 POST http://localhost:8000/clientes/
+Cookie: {{auth_cookie}}
 Content-Type: application/json
 
 {
@@ -18,6 +24,7 @@ Content-Type: application/json
 
 ### Create cliente - invalid email (422)
 POST http://localhost:8000/clientes/
+Cookie: {{auth_cookie}}
 Content-Type: application/json
 
 {
@@ -27,6 +34,7 @@ Content-Type: application/json
 
 ### Create cliente - missing nombre (422)
 POST http://localhost:8000/clientes/
+Cookie: {{auth_cookie}}
 Content-Type: application/json
 
 {
@@ -35,27 +43,35 @@ Content-Type: application/json
 
 ### List clientes - default pagination (200)
 GET http://localhost:8000/clientes/
+Cookie: {{auth_cookie}}
 
 ### List clientes - custom pagination (200)
-GET http://localhost:8000/clientes/?limit=5&offset=0
+GET http://localhost:8000/clientes/?page=1&size=5
+Cookie: {{auth_cookie}}
 
-### List clientes - invalid limit (422)
-GET http://localhost:8000/clientes/?limit=101
+### List clientes - invalid size (422)
+GET http://localhost:8000/clientes/?size=101
+Cookie: {{auth_cookie}}
 
-### List clientes - invalid offset (422)
-GET http://localhost:8000/clientes/?offset=-1
+### List clientes - invalid page (422)
+GET http://localhost:8000/clientes/?page=0
+Cookie: {{auth_cookie}}
 
 ### Get cliente by id - with perfil (200)
 GET http://localhost:8000/clientes/1
+Cookie: {{auth_cookie}}
 
 ### Get cliente by id - without perfil (200)
 GET http://localhost:8000/clientes/2
+Cookie: {{auth_cookie}}
 
 ### Get cliente by id - not found (404)
 GET http://localhost:8000/clientes/999
+Cookie: {{auth_cookie}}
 
 ### Update cliente - nombre only (200)
 PATCH http://localhost:8000/clientes/1
+Cookie: {{auth_cookie}}
 Content-Type: application/json
 
 {
@@ -65,6 +81,7 @@ Content-Type: application/json
 ### Update cliente - email to existing (409)
 # First create another cliente
 POST http://localhost:8000/clientes/
+Cookie: {{auth_cookie}}
 Content-Type: application/json
 
 {
@@ -72,8 +89,9 @@ Content-Type: application/json
   "email": "pedro.lopez@example.com"
 }
 
-# Then try to update cliente 1 to pedro's email
+### Then try to update cliente 1 to pedro's email
 PATCH http://localhost:8000/clientes/1
+Cookie: {{auth_cookie}}
 Content-Type: application/json
 
 {
@@ -82,6 +100,7 @@ Content-Type: application/json
 
 ### Update cliente - not found (404)
 PATCH http://localhost:8000/clientes/999
+Cookie: {{auth_cookie}}
 Content-Type: application/json
 
 {
@@ -90,6 +109,7 @@ Content-Type: application/json
 
 ### Create perfil for cliente - success (201)
 POST http://localhost:8000/clientes/1/perfil
+Cookie: {{auth_cookie}}
 Content-Type: application/json
 
 {
@@ -99,6 +119,7 @@ Content-Type: application/json
 
 ### Create perfil for cliente - duplicate perfil (409)
 POST http://localhost:8000/clientes/1/perfil
+Cookie: {{auth_cookie}}
 Content-Type: application/json
 
 {
@@ -108,6 +129,7 @@ Content-Type: application/json
 
 ### Create perfil for cliente - not found (404)
 POST http://localhost:8000/clientes/999/perfil
+Cookie: {{auth_cookie}}
 Content-Type: application/json
 
 {
@@ -117,9 +139,12 @@ Content-Type: application/json
 
 ### Get ventas by cliente - success (200)
 GET http://localhost:8000/clientes/1/ventas
+Cookie: {{auth_cookie}}
 
 ### Get ventas by cliente - empty list (200)
 GET http://localhost:8000/clientes/2/ventas
+Cookie: {{auth_cookie}}
 
 ### Get ventas by cliente - not found (404)
 GET http://localhost:8000/clientes/999/ventas
+Cookie: {{auth_cookie}}
