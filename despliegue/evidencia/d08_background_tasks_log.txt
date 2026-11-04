@@ -1,0 +1,7 @@
+$ docker logs libreria | tail -n 6
+INFO:     194.164.72.1:51234 - "POST /ventas/ HTTP/1.1" 201 Created
+[BG-TASK] Generando comprobante para venta #2 (cliente_id=1, total=$145.00)...
+[BG-TASK] Comprobante simulado enviado exitosamente a cliente_id=1.
+
+Notas:
+- El aviso del comprobante emitido por BackgroundTasks aparece en los logs del contenedor con uvicorn después de la línea de respuesta HTTP 201 Created.

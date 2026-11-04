@@ -1,241 +1,179 @@
-# API de Librería — TP Unidades 1 a 4
+# Parcial: Librería con Acceso, Transacciones y Despliegue en el VPS
 
-> API REST construida con FastAPI + SQLAlchemy 2.0 async + PostgreSQL 16.
-> Esta documentación cubre el estado final después de implementar C-01 a C-08.
-
----
-
-## 📦 Estado actual de la fundación
-
-Todos los changes C-01 a C-08 están `[x]` completados. El proyecto tiene:
-
-- **C-01**: Scaffolding + healthchecks (base + `GET /health/live` y `GET /health/ready`)
-- **C-02**: Modelos core + primera migración (constraints UNIQUE/CHECK, `Decimal` para dinero)
-- **C-03**: Entidad `genero` + segunda migración (CRUD géneros, relación opcional `libro.genero_id`)
-- **C-04**: CRUD catálogo + alta de libro con autorías (filtros case-insensitive, `IntegrityError → 409`)
-- **C-05**: CRUD clientes + perfil único (RN-09: un perfil por cliente)
-- **C-06**: Alta de venta con renglones + `BackgroundTasks` (RN-04 a RN-08, precios copiados server-side)
-- **C-07**: Lecturas sin N+1 (carga anticipada `joinedload`/`selectinload`, queries fijas)
-- **C-08**: Seed reproducible + suite `.http` + README final de entrega
+> **Tecnicatura Universitaria en Programación — Universidad Tecnológica Nacional (UTN)**  
+> **Materia**: Programación III  
+> **Unidad**: 1 a 6 — Del Objeto a la Transacción  
+> **Grupo**: LocalHost  
+> **Integrantes**:
+> - Máximo Franco
+> - Andrés Donoso
+> - Octavio Roco
 
 ---
 
-## 🚀 Orden de arranque desde cero
+## 📖 Descripción General del Proyecto
 
-### Paso 0 — Iniciar Docker Desktop
+Este proyecto amplía el Trabajo Práctico de los capítulos 1 a 4 y cubre integralmente hasta el capítulo 6 de la materia:
+1. **Arquitectura en 5 capas**: `Router → Service → Unit of Work → Repository → Model`.
+2. **Identidad, Roles y Autenticación**:
+   - Contraseñas hasheadas con `bcrypt` fuera del bucle de eventos (`asyncio.to_thread`) y bajo semáforo concurrente (`asyncio.Semaphore`).
+   - Sesión basada en cookie `HttpOnly` `access_token` firmada con PyJWT (HS256).
+   - Autorización consultando la tabla `asignacion_rol` en la base de datos en cada petición con soporte de vigencia temporal (`desde`, `vence_en`, `revocada_en`).
+   - Dos grupos de rutas: grupo **abierto** (rutas públicas y `/auth`) y grupo **protegido** (aplica verificación de rol y control del cambio obligatorio de contraseña `debe_cambiar_password`).
+3. **Persistencia y Transaccionalidad**:
+   - `BaseRepository[T]` y `SoftDeleteRepository[T]` (borrado lógico con `borrado_en` e índices únicos parciales `WHERE borrado_en IS NULL`).
+   - `UnitOfWork` asincrónico por módulo que abre transacciones explícitas, confirma al salir del bloque y revierte ante cualquier excepción.
+   - Punto único de escritura de stock (`libro.stock == SUM(movimiento_stock.cantidad)`).
+   - Tabla `movimiento_stock` de **sólo-agregado** protegida en PostgreSQL mediante un disparador (`TRIGGER`) instalado por la **Migración 004** escrita a mano.
+   - Prevención exhaustiva de N+1 mediante precarga anticipada (`joinedload` y `selectinload`).
+4. **Despliegue del TP 1-4 en VPS (`despliegue/`)**:
+   - Contenedor Docker basado en `python:3.12-alpine` (< 100 MB), usuario sin privilegios `USER appuser`, sin secretos en la imagen, `HEALTHCHECK` activo contra `/health/ready`, y arranque con migraciones automáticas (`alembic upgrade head`).
 
-Asegurarse de que el daemon de Docker esté corriendo antes de levantar la base de datos:
+---
 
+## 🚀 Puesta en Marcha desde Cero
+
+### Requisitos Previos
+- **Python 3.12** instalado en el sistema (`py -3.12 --version` o `python3.12 --version`).
+- **PostgreSQL 16** en ejecución (local o en contenedor Docker).
+
+### 1. Clonar el Repositorio y Crear el Entorno Virtual
 ```powershell
-docker desktop start
-```
-
-### Paso 1 — Crear y activar el entorno virtual con Python 3.12
-
-```powershell
-py -3.12 --version
+# En Windows PowerShell:
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python --version
+
+# En Linux / macOS:
+python3.12 -m venv .venv
+source .venv/bin/activate
 ```
 
-### Paso 2 — Instalar dependencias
-
-```powershell
+### 2. Instalar Dependencias
+```bash
+pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### Paso 3 — Configurar variables de entorno (`.env`)
-
-Copiar `env.example` a `.env` (no versionado) y ajustar las credenciales locales que coincidan con `compose.yaml`:
-
-```powershell
-Copy-Item env.example .env
+### 3. Configurar el Archivo de Entorno (`.env`)
+Copiar la plantilla `env.example` a `.env` (este archivo no se versiona):
+```bash
+cp env.example .env     # En Linux / macOS
+Copy-Item env.example .env  # En PowerShell
 ```
 
-Valores de desarrollo local por defecto en `.env`:
+Generar una clave de firma criptográfica para JWT y configurarla en `.env`:
+```bash
+python -c "import secrets; print(secrets.token_hex(32))"
+```
 
+Ajustar las variables en `.env` según la configuración local de PostgreSQL:
 ```dotenv
-DATABASE_URL=postgresql+asyncpg://libreria:libreria_dev_local@localhost:5433/libreria
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=tu_password_local
+POSTGRES_DB=libreria
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+
+JWT_SECRET=clave_generada_con_secrets_token_hex_32
+JWT_EXPIRATION_SECONDS=1800
+BCRYPT_ROUNDS=12
+COOKIE_SECURE=false
+
+DB_POOL_SIZE=5
 SQL_ECHO=false
 ```
 
-> **PA-01 (Python 3.12 en paralelo):** El proyecto requiere **Python 3.12** (`3.12.10` instalado en paralelo en el sistema). El entorno virtual `.venv` se crea explícitamente con `py -3.12 -m venv .venv`. No usar Python 3.14 como venv principal.
-
-> **PA-04 (`compose.yaml` como comodidad local):** El archivo `compose.yaml` se incluye exclusivamente como comodidad de desarrollo local para levantar PostgreSQL 16 reproduciblemente sin alterar instalaciones del sistema operativo; **no forma parte de los artefactos exigidos por la consigna de entrega**.
-
-### Paso 4 — Levantar PostgreSQL 16 en Docker
-
-```powershell
-docker compose up -d
-docker compose ps
-```
-
-Verificar que el contenedor `tp_libreria_pg16` figure en estado `healthy` y acepte conexiones en el puerto `5433`:
-
-```powershell
-docker exec tp_libreria_pg16 pg_isready -U libreria -d libreria
-```
-
-### Paso 5 — Verificar estado de migraciones (Alembic asincrónico)
-
-```powershell
-.\.venv\Scripts\alembic current
-```
-
-### Paso 6 — Aplicar seed de datos reproducibles
-
-```powershell
-python seed_db.py
-```
-
-Debería imprimir algo como:
-
-```
-✅ Seed completado exitosamente
-   - 3 editoriales
-   - 3 géneros
-   - 4 autores
-   - 5 libros
-   - 1 cliente con perfil
-   - 1 venta de ejemplo con 2 renglones
-```
-
-### Paso 7 — Iniciar el servidor ASGI (`uvicorn`)
-
-```powershell
-.\.venv\Scripts\uvicorn app.main:app --host 127.0.0.1 --port 8000
-```
-
----
-
-## 📡 Endpoints principales
-
-### Sondas de salud
-
-| Endpoint | Descripción |
-|---|---|
-| `GET /health/live` | `200 {"estado": "vivo"}` — sin tocar la base |
-| `GET /health/ready` | `200 {"estado": "listo"}` — `SELECT 1` contra la base |
-
-> **RN-12: sin traza interna** — los errores de DB se traducen a `"Base de datos no disponible"` sin exponer contraseñas ni nombres de tabla.
-
-### Catálogo (módulo `libros`)
-
-| Endpoint | Descripción |
-|---|---|
-| `POST /libros/` | Crear libro con autorías (201). ISBN repetido → 409. FK inexistente → 409. DTO inválido → 422. |
-| `GET /libros/` | Listado paginado (`limit` 1-100/def.20, `offset` >=0). Filtro `titulo` case-insensitive con parámetro ligado. Filtro `genero_id`. |
-| `GET /libros/{id}` | Detalle con **eager loading declarado** (C-07): `joinedload` editorial/género, `selectinload` autorías. Cero lazy loading. |
-
-> **C-07 (Evidencia):** Con `SQL_ECHO=true`, la misma cantidad de queries se ejecuta independientemente de la cantidad de autores o renglones. Ejemplo de salida de consola:
-
-```
-INFO sqlalchemy.engine.Engine: SELECT libro.id, ... FROM libro ...
-INFO sqlalchemy.engine.Engine: SELECT ... FROM editorial WHERE editorial.id = ...
-INFO sqlalchemy.engine.Engine: SELECT ... FROM genero WHERE genero.id = ...
-INFO sqlalchemy.engine.Engine: SELECT ... FROM libro_autor WHERE libro_id = ...
-INFO sqlalchemy.engine.Engine: SELECT ... FROM autor WHERE autor.id = ...
-```
-
-Siempre 6 queries (1 base + 2 one-to-one + 1 colección), aunque el libro tenga 1 o 10 autores.
-
-| Endpoint | Descripción |
-|---|---|
-| `GET /libros/?titulo=' OR '1'='1` | Inyección SQL segura → 200 con lista vacía (parámetro ligado, no concatena texto) |
-
-### Ventas (módulo `ventas`)
-
-| Endpoint | Descripción |
-|---|---|
-| `POST /ventas/` | Crear venta con renglones (201). ≥1 renglón y sin libros repetidos. Precio/copy desde libro al renglón (RN-06). Total calculado server-side (RN-07). `BackgroundTasks` aviso de comprobante (no bloquea respuesta). Sin PATCH en ventas (RN-08). |
-| `GET /ventas/` | Listado paginado con `cliente` cargado (`joinedlist`). **No carga renglones** para evitar N+1 (US-031). |
-| `GET /ventas/{id}` | Detalle con **eager loading fijo**: `joinedload` cliente, `selectinload` renglones + `libro`. Cantidad fija de queries aunque haya N renglones. |
-
-> **C-07 (Evidencia):** Con `SQL_ECHO=true`, verificar que `GET /ventas/1` y `GET /libros/1` ejecutan la misma cantidad de queries que `GET /ventas/` y `GET /libros/` respectivamente, aun con más datos.
-
-| Endpoint | Descripción |
-|---|---|
-| `GET /ventas/?limit=5&offset=0` | Listado paginado (RN-10). |
-
-### Clientes (módulo `clientes`)
-
-| Endpoint | Descripción |
-|---|---|
-| `POST /clientes/` | Crear cliente (201). Email único a nivel de base (RN-02, 409). |
-| `GET /clientes/` | Listado paginado (RN-10). Sin perfil para evitar N+1. |
-| `GET /clientes/{id}` | Cliente con perfil (objeto, no lista). Email repetido → 409 (RN-02). |
-| `POST /clientes/{id}/perfil` | Segundo perfil para mismo cliente → 409 (RN-09, C-03 de los casos). |
-| `GET /clientes/{id}/ventas` | Historial de ventas del cliente. |
-
----
-
-## 📊 Evidencia C-07: Lecturas sin N+1
-
-Para generar la evidencia de queries fijas:
-
-1. Poner `SQL_ECHO=true` en el archivo `.env`
-2. Levantar el servidor (`uvicorn app.main:app --host 127.0.0.1 --port 8000`)
-3. Ejecutar las siguientes peticiones y contar las queries en consola:
-
-### Con 1 libro/autor (datos mínimos semilla):
-
+### 4. Aplicar Migraciones de la Base de Datos (Alembic)
+Aplica las 4 migraciones (001 a 004), creando las 14 tablas e instalando la función y disparador de sólo-agregado:
 ```bash
-GET /libros/1
-GET /ventas/1
+alembic upgrade head
 ```
 
-### Con N libros/autores (después de correr `python seed_db.py`):
-
+### 5. Poblar el Estado Canónico Inicial (`seed.py`)
+Ejecutar el script canónico idempotente:
 ```bash
-GET /libros/1
-GET /ventas/1
+python seed.py
 ```
+El script vacía todas las tablas con `RESTART IDENTITY CASCADE` y carga el estado de referencia:
+- **5 usuarios**:
+  - `admin@example.com` (`ADMIN`, contraseña: `Admin123!`)
+  - `admin2@example.com` (`ADMIN`, contraseña: `Admin123!`)
+  - `vendedor@example.com` (`VENDEDOR`, contraseña: `Vendedor123!`)
+  - `ana@example.com` (`CLIENTE`, contraseña: `Cliente123!`)
+  - `nuevo@example.com` (`VENDEDOR`, contraseña: `Nuevo123!`, con `debe_cambiar_password=True`)
+- **Catálogo**: 3 editoriales, 3 géneros, 6 autores y 5 libros con stock exacto:
+  - *Rayuela* (stock: 10, precio: $25000.00)
+  - *Antología de la literatura fantástica* (stock: 5, precio: $30000.00)
+  - *Ficciones* (stock: 8, precio: $22000.00)
+  - *Respiración artificial* (stock: 3, precio: $18000.00)
+  - *Bestiario* (stock: 1, precio: $15000.00)
+- **3 clientes**: Lucía Fernández (con PerfilCliente), Tomás Ríos (sin usuario), Ana Paz (con usuario_id de Ana).
+- **1 venta**: Venta #1 de Lucía Fernández registrada por `vendedor@example.com` ($69000.00, 1 Rayuela + 2 Ficciones).
+- **7 movimientos de stock**: 5 de "Stock inicial" + 2 salidas por la Venta #1 (invariante `stock == SUM(cantidad)` verificada).
+- **1 evento de seguridad**: `actor="SISTEMA"`, `accion="Carga de los datos iniciales"`.
 
-**Expected output (consola):** Siempre la misma cantidad de queries, ej:
-
+### 6. Iniciar el Servidor ASGI (`uvicorn`)
+```bash
+uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
-INFO sqlalchemy.engine.Engine: SELECT libro.id, libro.isbn, ... FROM libro WHERE libro.id = ? (params: (1,))
-INFO sqlalchemy.engine.Engine: SELECT editorial.id, editorial.nombre, ... FROM editorial WHERE editorial.id = ? (params: (1,))
-INFO sqlalchemy.engine.Engine: SELECT genero.id, genero.nombre, ... FROM genero WHERE genero.id = ? (params: (1,))
-INFO sqlalchemy.engine.Engine: SELECT libro_autor.libro_id, ... FROM libro_autor WHERE libro_id = ? (params: (1,))
-INFO sqlalchemy.engine.Engine: SELECT autor.id, autor.nombre, ... FROM autor WHERE autor.id IN (...) (params: (1,))
-```
-
-La cuenta no crece al agregar más autores/renglones porque todas las relaciones usan `joinedload` (one-to-one) o `selectinload` (colecciones) en una sola query cada una.
+La documentación interactiva OpenAPI (Swagger) queda disponible en `http://127.0.0.1:8000/docs`.
 
 ---
 
-## 📦 Artefactos de entrega (C-08)
+## 🧪 Pruebas Automatizadas y Casos de Evaluación
 
-Los siguientes archivos forman el entregable final:
+### Suite Completa de Tests (Strict TDD)
+Ejecutar la suite automatizada con pytest:
+```bash
+pytest
+```
+La suite cuenta con 167 tests automatizados en verde que cubren contratos, ciclo de vida, modelos, repositorios, UoW, auth con bcrypt/JWT, roles y vigencia, stock, ventas, trigger de sólo-agregado y empaquetador.
 
-| Archivo | Descripción |
-|---|---|
-| `seed_db.py` | Script de seed reproducible con estado conocido (editoriales, géneros, autores, libros, cliente+perfil, venta de ejemplo). |
-| `test/*.http` | Suite de pruebas `.http` que cubren C-01 a C-08, incluyendo evidencia C-07 (SQL_ECHO). |
-| `requirements.txt` | Dependencias finales (igual a la versión actual). |
-| `env.example` | Variables de entorno ejemplo (igual a la versión actual con `SQL_ECHO=false`). |
-| `README.md` | Esta documentación — pasos desde cero + evidencia C-07 + decisiones PA-02 y PA-04. |
+### Casos de Evaluación C-01 a C-16 (`test/parcial_casos.http`)
+La carpeta `test/` incluye `parcial_casos.http` documentando los 16 casos mínimos de evaluación exigidos por la consigna:
+- **C-01**: Parámetro de ruta no entero con sesión iniciada → `422 Unprocessable Entity`.
+- **C-02**: Registro con email duplicado de usuario o de cliente existente → `201` y `409 Conflict`.
+- **C-03**: Cookie `access_token` en el login (`HttpOnly`, `SameSite=Lax`); rechazo de `Authorization: Bearer` → `401`.
+- **C-04**: Contraseña incorrecta y correo inexistente (tiempo y mensaje uniforme) → `401 Unauthorized`.
+- **C-05**: Seis intentos fallidos seguidos → Rate Limit con `429 Too Many Requests` y `Retry-After`.
+- **C-06**: 401 contra 403, y lo propio (el cliente ve su venta con 200 y la ajena con 403).
+- **C-07**: Revocar un rol con sesión abierta (403 inmediato en la siguiente petición); vencimientos inválidos (422).
+- **C-08**: Autoprotección: el administrador no puede revocarse su propio rol ADMIN (409).
+- **C-09**: Cambio obligatorio de contraseña: ruta `/auth/cambiar-password` permitida, grupo protegido habilitado tras el cambio con la misma sesión.
+- **C-10**: Venta válida con dos renglones: descuento atómico de stock, movimientos registrados y aviso en background.
+- **C-11**: Venta con stock insuficiente: rollback total (409), ningún stock alterado, invariante intacta.
+- **C-12**: Venta con cliente/libro inexistente o libro dado de baja → `409 Conflict`.
+- **C-13**: Reponer stock (200), baja lógica (204), alta reutilizando el mismo ISBN (201) y segundo libro activo repetido (409).
+- **C-14**: Intentos de `UPDATE` y `DELETE` sobre `movimiento_stock` en `psql` rechazados por el trigger.
+- **C-15**: Detalle de venta con 2 y 4 renglones ejecutando la misma cantidad fija de consultas SQL (2 queries).
+- **C-16**: Búsqueda segura con parámetros ligados, paginación con filtros (`page > pages → 422`), PATCH parcial y rechazo de `stock` en PATCH (`422`).
 
-> **PA-02 (VPS/Easypanel fuera de la entrega):** Cualquier despliegue en VPS con Easypanel queda definido únicamente como ejercicio opcional **post-entrega** y fuera del alcance de corrección del trabajo práctico. La evaluación se realiza íntegramente en local siguiendo los pasos de esta guía.
-
-> **PA-04 (`compose.yaml` solo dev):** El archivo `compose.yaml` es una comodidad de desarrollo local para levantar PostgreSQL 16 reproduciblemente. **No subirse al repositorio** como parte de la entrega corporativa; forma parte del entorno de desarrollo del equipo.
+### Script SQL de Sólo-Agregado y Evidencias
+- `test/solo_agregado.sql`: Script con sentencias UPDATE y DELETE para demostrar la restricción RN-12.
+- `evidencia/c14_solo_agregado.txt`: Captura de salida de `psql` mostrando el rechazo por el trigger.
+- `evidencia/c15_sin_nplusone.txt`: Registro de queries ejecutadas para ventas de 2 y 4 renglones demostrando ausencia de N+1.
 
 ---
 
-## 📜 Reglas aplicadas (desde `AGENTS.md` / `CLAUDE.md`)
+## 🐳 Despliegue en VPS del TP 1-4 (`despliegue/`)
 
-No commitear de forma autónoma. Usar `Decimal` para dinero. Cargar relaciones con `joinedload`/`selectinload` (nunca lazy loading por defecto). Traducir `IntegrityError` a mensaje propio + 409/422. Nunca crear esquema con `create_all` — exclusivo Alembic. SQL concatenado con texto prohibido — usar parámetros ligados.
+La carpeta `despliegue/` contiene el código original del Trabajo Práctico de los Capítulos 1 a 4 (extraído limpiamente del commit `65ae2a6`), junto con:
+- `Dockerfile`: basado en `python:3.12-alpine`, usuario sin privilegios `appuser`, `HEALTHCHECK` activo contra `/health/ready` y arranque con `alembic upgrade head && uvicorn`.
+- `.dockerignore`: excluye `.env`, `.venv`, `.git` y `__pycache__`.
+- `env.example`: plantilla de configuración del contenedor.
+- `DEPLOY.md`: documentación completa del despliegue en VPS, comandos `docker build`/`docker run`, URL pública, procedimientos de actualización y tabla de casos `D-01` a `D-08`.
+- `evidencia/`: archivos de captura de los casos `D-01` a `D-08`.
 
 ---
 
-## 🛠️ Comandos útiles
+## 📦 Empaquetado para la Entrega Final
 
-| Comando | Descripción |
-|---|---|
-| `alembic upgrade head` | Aplicar todas las migraciones pendientes |
-| `alembic downgrade -1` | Deshacer la última migración |
-| `python seed_db.py` | Cargar datos reproducibles en la base |
-| `SQL_ECHO=true uvicorn app.main:app --host 127.0.0.1 --port 8000` | Ver consultas SQL en consola (C-07 evidencia) |
-| `pytest` | Ejecutar test suite |
+Para generar el archivo comprimido `.zip` conforme al formato de entrega de la cátedra:
+```bash
+python scripts/empaquetar_entrega.py LocalHost
+```
+Este comando ensambla automáticamente `Parcial_Cap1a6_LocalHost.zip` con las dos carpetas independientes:
+- `parcial/`: Raíz del proyecto del Parcial completa (código fuente, `migrations/`, `test/`, `evidencia/`, `seed.py`, `README.md`, `requirements.txt`, etc.).
+- `despliegue/`: Proyecto TP 1-4 dockerizado con `Dockerfile`, `DEPLOY.md` y evidencias.
+
+Excluyendo estrictamente: `.venv`, `.git`, `.env` y directorios `__pycache__`.

@@ -1,0 +1,13 @@
+$ docker run --rm libreria:tp1a4
+Traceback (most recent call last):
+  File "/app/app/core/config.py", line 12, in <module>
+    settings = Settings()
+  File "pydantic_settings/main.py", line 170, in __init__
+    super().__init__(**__pydantic_self__.__class__._settings_build_values(sources, init_kwargs))
+pydantic_core._pydantic_core.ValidationError: 1 validation error for Settings
+DATABASE_URL
+  Field required [type=missing, input_value={}, input_type=dict]
+
+Notas:
+- El contenedor termina inmediatamente con error de validación (exit code != 0).
+- No arranca el servidor si falta DATABASE_URL, evitando quedar atendiendo sin conexión a base de datos.

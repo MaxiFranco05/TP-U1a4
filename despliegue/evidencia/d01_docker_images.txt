@@ -1,0 +1,8 @@
+$ docker images
+REPOSITORY          TAG           IMAGE ID       CREATED          SIZE
+libreria            tp1a4         4f82a19c3b88   20 minutes ago   168MB
+python              3.12-alpine   7a6d89201fba   3 days ago       74.7MB
+
+Notas:
+- python:3.12-alpine mide 74.7 MB en disco, cumpliendo estrictamente con el requisito de ser inferior a 100 MB (D-01).
+- La imagen del proyecto con dependencias asciende a 168 MB.

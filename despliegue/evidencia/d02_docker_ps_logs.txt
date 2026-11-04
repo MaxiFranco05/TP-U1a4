@@ -1,0 +1,13 @@
+$ docker ps
+CONTAINER ID   IMAGE            COMMAND                  CREATED         STATUS                    PORTS                    NAMES
+8d12e9b04f12   libreria:tp1a4   "sh -c 'alembic upgr…"   3 minutes ago   Up 3 minutes (healthy)   0.0.0.0:8000->8000/tcp   libreria
+
+$ docker logs libreria
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 001_initial_schema, esquema inicial del TP
+INFO  [alembic.runtime.migration] Running upgrade 001_initial_schema -> 002_add_generos, agregar tabla genero y libro.genero_id
+INFO:     Started server process [1]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)

@@ -1,0 +1,11 @@
+# Exclusiones de Docker para la imagen del TP 1-4
+.env
+.venv
+.git
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+evidencia
+DEPLOY.md

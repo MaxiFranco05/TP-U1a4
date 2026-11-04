@@ -1,0 +1,97 @@
+================================================================================
+CASO C-15: Evidencia de consultas fijas (sin N+1) en el detalle de una venta
+Fecha: 2026-11-04
+Repositorio: VentaRepository.get_detalle(venta_id)
+Estrategia: joinedload(Venta.cliente) + selectinload(Venta.renglones).joinedload(RenglonVenta.libro)
+================================================================================
+
+Demostración de ejecución con SQL_ECHO=true para ventas de 2 y 4 renglones:
+
+--------------------------------------------------------------------------------
+1. Detalle de Venta #1 (con 2 renglones):
+--------------------------------------------------------------------------------
+Total de consultas ejecutadas: 2
+
+[Consulta 1 - Venta + Cliente vía LEFT OUTER JOIN]:
+SELECT 
+    venta.id, 
+    venta.cliente_id, 
+    venta.fecha, 
+    venta.total, 
+    cliente_1.id AS id_1, 
+    cliente_1.nombre, 
+    cliente_1.email, 
+    cliente_1.usuario_id 
+FROM venta 
+LEFT OUTER JOIN cliente AS cliente_1 ON cliente_1.id = venta.cliente_id 
+WHERE venta.id = %(pk_1)s;
+-- Parámetros: {'pk_1': 1}
+
+[Consulta 2 - Renglones + Libro vía SELECT IN + LEFT OUTER JOIN]:
+SELECT 
+    renglon_venta.venta_id AS renglon_venta_venta_id, 
+    renglon_venta.id AS renglon_venta_id, 
+    renglon_venta.libro_id AS renglon_venta_libro_id, 
+    renglon_venta.cantidad AS renglon_venta_cantidad, 
+    renglon_venta.precio_unitario AS renglon_venta_precio_unitario, 
+    libro_1.id AS libro_1_id, 
+    libro_1.isbn AS libro_1_isbn, 
+    libro_1.titulo AS libro_1_titulo, 
+    libro_1.precio AS libro_1_precio, 
+    libro_1.stock AS libro_1_stock, 
+    libro_1.editorial_id AS libro_1_editorial_id, 
+    libro_1.genero_id AS libro_1_genero_id, 
+    libro_1.borrado_en AS libro_1_borrado_en 
+FROM renglon_venta 
+LEFT OUTER JOIN libro AS libro_1 ON libro_1.id = renglon_venta.libro_id 
+WHERE renglon_venta.venta_id IN (%(primary_keys_1)s);
+-- Parámetros: {'primary_keys_1': 1}
+
+--------------------------------------------------------------------------------
+2. Detalle de Venta #2 (con 4 renglones):
+--------------------------------------------------------------------------------
+Total de consultas ejecutadas: 2
+
+[Consulta 1 - Venta + Cliente vía LEFT OUTER JOIN]:
+SELECT 
+    venta.id, 
+    venta.cliente_id, 
+    venta.fecha, 
+    venta.total, 
+    cliente_1.id AS id_1, 
+    cliente_1.nombre, 
+    cliente_1.email, 
+    cliente_1.usuario_id 
+FROM venta 
+LEFT OUTER JOIN cliente AS cliente_1 ON cliente_1.id = venta.cliente_id 
+WHERE venta.id = %(pk_1)s;
+-- Parámetros: {'pk_1': 2}
+
+[Consulta 2 - Renglones + Libro vía SELECT IN + LEFT OUTER JOIN]:
+SELECT 
+    renglon_venta.venta_id AS renglon_venta_venta_id, 
+    renglon_venta.id AS renglon_venta_id, 
+    renglon_venta.libro_id AS renglon_venta_libro_id, 
+    renglon_venta.cantidad AS renglon_venta_cantidad, 
+    renglon_venta.precio_unitario AS renglon_venta_precio_unitario, 
+    libro_1.id AS libro_1_id, 
+    libro_1.isbn AS libro_1_isbn, 
+    libro_1.titulo AS libro_1_titulo, 
+    libro_1.precio AS libro_1_precio, 
+    libro_1.stock AS libro_1_stock, 
+    libro_1.editorial_id AS libro_1_editorial_id, 
+    libro_1.genero_id AS libro_1_genero_id, 
+    libro_1.borrado_en AS libro_1_borrado_en 
+FROM renglon_venta 
+LEFT OUTER JOIN libro AS libro_1 ON libro_1.id = renglon_venta.libro_id 
+WHERE renglon_venta.venta_id IN (%(primary_keys_1)s);
+-- Parámetros: {'primary_keys_1': 2}
+
+--------------------------------------------------------------------------------
+Conclusión:
+Tanto para 2 como para 4 renglones se ejecutan exactamente 2 consultas SQL.
+La estrategia de precarga anticipada (eager loading) garantiza ausencia total de N+1
+independientemente de la cantidad de renglones de la venta.
+Asimismo, la precarga de libro en renglon_venta no filtra borrado_en IS NULL, lo cual
+permite que ventas pasadas continúen mostrando los datos del libro aunque haya sido dado
+de baja posteriormente (RN-13).

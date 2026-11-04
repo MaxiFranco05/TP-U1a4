@@ -1,0 +1,16 @@
+================================================================================
+CASO C-14: Salida de psql para test/solo_agregado.sql (RN-12)
+Fecha: 2026-11-04
+Comando ejecutado:
+psql -h localhost -p 5432 -U libreria -d libreria -f test/solo_agregado.sql
+================================================================================
+
+--- Intentando UPDATE sobre movimiento_stock (debe fallar) ---
+psql:test/solo_agregado.sql:10: ERROR:  La tabla movimiento_stock es de sólo agregado (RN-12): no se permite UPDATE sobre filas existentes.
+CONTEXTO:  función PL/pgSQL fn_movimiento_stock_append_only() en la línea 3 en RAISE
+--- Intentando DELETE sobre movimiento_stock (debe fallar) ---
+psql:test/solo_agregado.sql:14: ERROR:  La tabla movimiento_stock es de sólo agregado (RN-12): no se permite DELETE sobre filas existentes.
+CONTEXTO:  función PL/pgSQL fn_movimiento_stock_append_only() en la línea 3 en RAISE
+
+Resultado: Los dos intentos (UPDATE y DELETE) fueron rechazados exitosamente por
+el disparador trg_movimiento_stock_solo_agregado instalado en la Migración 004.

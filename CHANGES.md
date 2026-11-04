@@ -511,7 +511,7 @@ Paso │ Maxi (Bloque 1: Base y Datos)        │ Andrés (Bloque 2: Auth y Role
 
 ### [C-17] `seed-casos-prueba-y-despliegue-docker`
 - **Responsable**: **Octavio** (Bloque 3 — Change 3/3)
-- **Estado**: [ ] pendiente
+- **Estado**: [x] completado
 - **Scope**: `seed.py` del Parcial, suite de pruebas `C-01` a `C-16`, e imagen Docker + despliegue en el VPS en carpeta `despliegue/` (Ej. 9 — 11% y Ej. 10 — 7%)
   - **Parte A — Cierre de `parcial/` (raíz del proyecto)**:
     - `seed.py` en la raíz: vacía las tablas y carga los datos iniciales exactos de la consigna:

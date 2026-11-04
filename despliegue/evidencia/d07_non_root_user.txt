@@ -1,0 +1,9 @@
+$ docker exec libreria id
+uid=1000(appuser) gid=1000(appuser) groups=1000(appuser)
+
+$ docker exec libreria whoami
+appuser
+
+Notas:
+- El proceso principal de la aplicación corre bajo el usuario sin privilegios 'appuser'.
+- Cumple con la directriz de seguridad de no ejecución como root (D-07).

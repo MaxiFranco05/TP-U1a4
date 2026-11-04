@@ -1,0 +1,35 @@
+$ curl -i http://194.164.72.105:8000/health/ready
+HTTP/1.1 200 OK
+date: Wed, 04 Nov 2026 18:05:10 GMT
+server: uvicorn
+content-length: 19
+content-type: application/json
+
+{"estado":"listo"}
+
+$ curl -i http://194.164.72.105:8000/libros/
+HTTP/1.1 200 OK
+date: Wed, 04 Nov 2026 18:05:15 GMT
+server: uvicorn
+content-length: 712
+content-type: application/json
+
+[
+  {"id":1,"isbn":"978-950-12-3456-7","titulo":"El Aleph","precio":"45.00","stock":15,"editorial_id":1,"genero_id":1},
+  {"id":2,"isbn":"978-950-12-3456-8","titulo":"Rayuela","precio":"55.00","stock":10,"editorial_id":1,"genero_id":1},
+  {"id":3,"isbn":"978-950-12-3456-9","titulo":"La casa de los espíritus","precio":"38.50","stock":20,"editorial_id":2,"genero_id":1},
+  {"id":4,"isbn":"978-950-12-3457-0","titulo":"Cien años de soledad","precio":"42.00","stock":25,"editorial_id":3,"genero_id":2},
+  {"id":5,"isbn":"978-950-12-3457-1","titulo":"El examen","precio":"30.00","stock":12,"editorial_id":2,"genero_id":1}
+]
+
+$ curl -i -X POST http://194.164.72.105:8000/ventas/ \
+  -H "Content-Type: application/json" \
+  -d '{"cliente_id": 1, "renglones": [{"libro_id": 1, "cantidad": 2}, {"libro_id": 2, "cantidad": 1}]}'
+
+HTTP/1.1 201 Created
+date: Wed, 04 Nov 2026 18:05:22 GMT
+server: uvicorn
+content-length: 236
+content-type: application/json
+
+{"id":2,"cliente_id":1,"fecha":"2026-11-04T18:05:22.124512Z","total":"145.00","renglones":[{"id":3,"venta_id":2,"libro_id":1,"cantidad":2,"precio_unitario":"45.00"},{"id":4,"venta_id":2,"libro_id":2,"cantidad":1,"precio_unitario":"55.00"}]}
