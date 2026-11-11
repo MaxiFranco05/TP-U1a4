@@ -1,9 +1,8 @@
 """Lógica de negocio del módulo editoriales sobre UnitOfWork y Repository."""
 
-from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 
-from app.core.exceptions import translate_integrity_error
+from app.core.exceptions import EntityNotFoundError, translate_integrity_error
 from app.core.paginacion import PaginatedResponse, PaginationParams, paginate
 from app.modules.editoriales.models import Editorial
 from app.modules.editoriales.schemas import (
@@ -50,14 +49,11 @@ async def get_editorial(
     uow: EditorialesUnitOfWork,
     editorial_id: int,
 ) -> EditorialRead:
-    """Devuelve el DTO de lectura de una editorial existente o lanza 404."""
+    """Devuelve el DTO de lectura de una editorial existente o lanza EntityNotFoundError si no existe."""
     async with uow:
         editorial = await uow.editoriales.get_by_id(editorial_id)
         if editorial is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Editorial no encontrada",
-            )
+            raise EntityNotFoundError("Editorial no encontrada")
         return EditorialRead.model_validate(editorial)
 
 
@@ -66,14 +62,11 @@ async def update_editorial(
     editorial_id: int,
     payload: EditorialUpdate,
 ) -> EditorialRead:
-    """Actualiza parcialmente una editorial con exclude_unset=True traduciendo colisiones a 409 (RN-12)."""
+    """Actualiza parcialmente una editorial con exclude_unset=True traduciendo colisiones a ConflictError (RN-12)."""
     async with uow:
         editorial = await uow.editoriales.get_by_id(editorial_id)
         if editorial is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Editorial no encontrada",
-            )
+            raise EntityNotFoundError("Editorial no encontrada")
         updates = payload.model_dump(exclude_unset=True)
         try:
             await uow.editoriales.update(editorial, updates)
@@ -91,10 +84,7 @@ async def list_libros_by_editorial(
     async with uow:
         editorial = await uow.editoriales.get_by_id(editorial_id)
         if editorial is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Editorial no encontrada",
-            )
+            raise EntityNotFoundError("Editorial no encontrada")
         filters = (Libro.editorial_id == editorial_id,)
         total = await uow.libros.count(filters=filters)
         libros = await uow.libros.get_all(

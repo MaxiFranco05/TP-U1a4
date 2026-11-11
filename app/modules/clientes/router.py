@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Path, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
+from app.core.exceptions import DomainRoute
 from app.core.paginacion import PaginatedResponse, PaginationParams
 from app.modules.clientes.schemas import (
     ClienteCreate,
@@ -34,7 +35,7 @@ def get_clientes_uow(
     return ClientesUnitOfWork(session=session)
 
 
-router = APIRouter(prefix="/clientes", tags=["clientes"])
+router = APIRouter(prefix="/clientes", tags=["clientes"], route_class=DomainRoute)
 
 ClienteIdPath = Annotated[int, Path(ge=1)]
 

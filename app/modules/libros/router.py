@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
 from app.core.dependencies import get_usuario_actual
+from app.core.exceptions import DomainRoute
 from app.core.paginacion import PaginatedResponse, PaginationParams
 from app.modules.libros.schemas import (
     LibroCreate,
@@ -34,8 +35,8 @@ def get_libros_uow(
     return LibrosUnitOfWork(session=session)
 
 
-public_router = APIRouter(prefix="/libros", tags=["Libros"])
-protected_router = APIRouter(prefix="/libros", tags=["Libros"])
+public_router = APIRouter(prefix="/libros", tags=["Libros"], route_class=DomainRoute)
+protected_router = APIRouter(prefix="/libros", tags=["Libros"], route_class=DomainRoute)
 
 
 # --- Rutas Públicas (Lectura Abierta) ---

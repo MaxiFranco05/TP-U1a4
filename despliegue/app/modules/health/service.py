@@ -1,9 +1,9 @@
 """Lógica de negocio de las sondas de salud."""
 
-from fastapi import HTTPException, status
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import ServiceUnavailableError
 from app.modules.health.schemas import HealthLiveResponse, HealthReadyResponse
 
 
@@ -21,8 +21,5 @@ async def check_readiness(session: AsyncSession) -> HealthReadyResponse:
     try:
         await session.execute(text("SELECT 1"))
     except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Base de datos no disponible",
-        ) from exc
+        raise ServiceUnavailableError("Base de datos no disponible") from exc
     return HealthReadyResponse(estado="listo")

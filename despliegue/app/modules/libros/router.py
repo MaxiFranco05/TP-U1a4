@@ -5,6 +5,7 @@ from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, Path, Query, status
 
 from app.core.database import SessionDep
+from app.core.exceptions import DomainRoute
 from app.core.pagination import PaginationParams, get_pagination_params
 from app.modules.libros.schemas import (
     LibroCreate,
@@ -19,7 +20,7 @@ from app.modules.libros.service import (
     update_libro,
 )
 
-router = APIRouter(prefix="/libros", tags=["libros"])
+router = APIRouter(prefix="/libros", tags=["libros"], route_class=DomainRoute)
 
 LibroIdPath = Annotated[int, Path(ge=1)]
 TituloQuery = Annotated[Optional[str], Query()]

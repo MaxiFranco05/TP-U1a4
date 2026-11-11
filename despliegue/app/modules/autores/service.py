@@ -1,13 +1,12 @@
 """Lógica de negocio del módulo autores."""
 
 from decimal import Decimal
-from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
-from app.core.exceptions import translate_integrity_error
+from app.core.exceptions import EntityNotFoundError, translate_integrity_error
 from app.modules.autores.models import Autor
 from app.modules.autores.schemas import (
     AutorCreate,
@@ -35,10 +34,7 @@ async def get_autor_or_404(session: AsyncSession, autor_id: int) -> Autor:
     """Obtiene un autor por su clave primaria o lanza HTTP 404."""
     autor = await session.get(Autor, autor_id)
     if autor is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Autor no encontrado",
-        )
+        raise EntityNotFoundError("Autor no encontrado")
     return autor
 
 

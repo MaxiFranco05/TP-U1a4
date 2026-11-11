@@ -1,10 +1,10 @@
 """Lógica de negocio del módulo generos."""
 
-from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import ConflictError, EntityNotFoundError
 from app.modules.generos.models import Genero
 from app.modules.generos.schemas import (
     GeneroCreate,
@@ -23,10 +23,7 @@ async def create_genero(session: AsyncSession, payload: GeneroCreate) -> GeneroR
         await session.commit()
     except IntegrityError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Ya existe un género con ese nombre",
-        ) from exc
+        raise ConflictError("Ya existe un género con ese nombre") from exc
     await session.refresh(genero)
     return GeneroRead.model_validate(genero)
 
@@ -44,13 +41,10 @@ async def list_generos(
 
 
 async def get_genero_or_404(session: AsyncSession, genero_id: int) -> Genero:
-    """Obtiene un género por su clave primaria o lanza HTTP 404."""
+    """Obtiene un género por su clave primaria o lanza EntityNotFoundError."""
     genero = await session.get(Genero, genero_id)
     if genero is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Género no encontrado",
-        )
+        raise EntityNotFoundError("Género no encontrado")
     return genero
 
 
@@ -65,7 +59,7 @@ async def update_genero(
     genero_id: int,
     payload: GeneroUpdate,
 ) -> GeneroRead:
-    """Actualiza parcialmente un género usando exclude_unset=True y traduce colisiones a 409 (RN-12)."""
+    """Actualiza parcialmente un género usando exclude_unset=True y traduce colisiones a ConflictError (RN-12)."""
     genero = await get_genero_or_404(session, genero_id)
     updates = payload.model_dump(exclude_unset=True)
     for field_name, field_value in updates.items():
@@ -77,10 +71,7 @@ async def update_genero(
         await session.commit()
     except IntegrityError as exc:
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Ya existe un género con ese nombre",
-        ) from exc
+        raise ConflictError("Ya existe un género con ese nombre") from exc
     await session.refresh(genero)
     return GeneroRead.model_validate(genero)
 

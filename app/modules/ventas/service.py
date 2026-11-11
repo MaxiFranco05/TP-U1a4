@@ -4,10 +4,15 @@ import asyncio
 from decimal import Decimal
 import logging
 
-from fastapi import HTTPException, status
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
-from app.core.exceptions import translate_integrity_error
+from app.core.exceptions import (
+    ConflictError,
+    EntityNotFoundError,
+    InsufficientStockError,
+    PermissionDeniedError,
+    translate_integrity_error,
+)
 from app.core.paginacion import PaginatedResponse, calcular_paginas, validar_pagina
 from app.modules.libros.models import Libro
 from app.modules.usuarios.models import Usuario
@@ -54,26 +59,17 @@ async def crear_venta(
             if libro is None:
                 deleted = await uow.libros.get_by_id_including_deleted(lid)
                 if deleted is not None and deleted.borrado_en is not None:
-                    raise HTTPException(
-                        status_code=status.HTTP_409_CONFLICT,
-                        detail="El libro referenciado fue dado de baja",
-                    )
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="El libro referenciado no existe",
-                )
+                    raise ConflictError("El libro referenciado fue dado de baja")
+                raise ConflictError("El libro referenciado no existe")
             libros_dict[lid] = libro
 
         # 2. Validar stock suficiente
         for r in data.renglones:
             libro = libros_dict[r.libro_id]
             if libro.stock < r.cantidad:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail=(
-                        f"Stock insuficiente para el libro '{libro.titulo}' "
-                        f"(disponible: {libro.stock}, solicitado: {r.cantidad})"
-                    ),
+                raise InsufficientStockError(
+                    f"Stock insuficiente para el libro '{libro.titulo}' "
+                    f"(disponible: {libro.stock}, solicitado: {r.cantidad})"
                 )
 
         # 3. Construir renglones copiando precio_unitario y calcular total Decimal
@@ -115,18 +111,12 @@ async def crear_venta(
                     venta_id=venta.id,
                 )
             except ValueError as exc:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail=str(exc),
-                ) from exc
+                raise ConflictError(str(exc)) from exc
 
         # Precargar detalle completo para la respuesta antes de confirmar
         venta_completa = await uow.ventas.get_detalle(venta.id)
         if venta_completa is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Venta no encontrada",
-            )
+            raise EntityNotFoundError("Venta no encontrada")
         return VentaRead.model_validate(venta_completa)
 
 
@@ -145,10 +135,7 @@ async def obtener_venta_autorizada(
     async with uow:
         venta = await uow.ventas.get_detalle(venta_id)
         if venta is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Venta no encontrada",
-            )
+            raise EntityNotFoundError("Venta no encontrada")
 
         # Consultar roles vigentes en la base de datos
         asignaciones_repo = AsignacionRolRepository(session=uow.session)
@@ -162,10 +149,7 @@ async def obtener_venta_autorizada(
         )
 
         if not es_personal and not es_duenio:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="No posee los permisos para consultar esta venta.",
-            )
+            raise PermissionDeniedError("No posee los permisos para consultar esta venta.")
 
         return VentaRead.model_validate(venta)
 

@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.database import get_session
 from app.core.dependencies import get_usuario_actual
+from app.core.exceptions import DomainRoute
 from app.core.paginacion import PaginatedResponse, PaginationParams
 from app.core.security import decode_access_token
 from app.modules.usuarios.models import Usuario
@@ -27,7 +28,7 @@ from app.modules.usuarios.service import AuthService, UsuarioService
 from app.modules.usuarios.unit_of_work import UsuariosUnitOfWork
 
 
-router = APIRouter(prefix="/auth", tags=["Autenticación"])
+router = APIRouter(prefix="/auth", tags=["Autenticación"], route_class=DomainRoute)
 
 
 def get_usuarios_uow(
@@ -165,7 +166,7 @@ def get_usuario_service() -> UsuarioService:
     return UsuarioService()
 
 
-usuarios_router = APIRouter(prefix="/usuarios", tags=["Usuarios y Personal"])
+usuarios_router = APIRouter(prefix="/usuarios", tags=["Usuarios y Personal"], route_class=DomainRoute)
 
 
 @usuarios_router.post(
@@ -275,7 +276,7 @@ async def revocar_rol(
     )
 
 
-eventos_router = APIRouter(prefix="/eventos", tags=["Eventos de Seguridad"])
+eventos_router = APIRouter(prefix="/eventos", tags=["Eventos de Seguridad"], route_class=DomainRoute)
 
 
 @eventos_router.get(

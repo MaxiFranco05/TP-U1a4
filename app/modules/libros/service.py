@@ -2,10 +2,15 @@
 
 from decimal import Decimal
 
-from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 
-from app.core.exceptions import translate_integrity_error
+from app.core.exceptions import (
+    BusinessRuleViolationError,
+    ConflictError,
+    DomainError,
+    EntityNotFoundError,
+    translate_integrity_error,
+)
 from app.core.paginacion import PaginatedResponse, PaginationParams, paginate
 from app.modules.libros.models import Libro, LibroAutor
 from app.modules.libros.schemas import (
@@ -60,9 +65,9 @@ async def create_libro(
 
         detalle = await uow.libros.get_detalle(libro.id)
         if detalle is None:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            raise DomainError(
                 detail="Error al recuperar el libro creado",
+                status_code=500,
             )
         return LibroRead.model_validate(detalle)
 
@@ -96,14 +101,11 @@ async def get_libro(
     uow: LibrosUnitOfWork,
     libro_id: int,
 ) -> LibroRead:
-    """Obtiene el detalle completo de un libro activo o lanza 404."""
+    """Obtiene el detalle completo de un libro activo o lanza EntityNotFoundError."""
     async with uow:
         libro = await uow.libros.get_detalle(libro_id)
         if libro is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Libro no encontrado",
-            )
+            raise EntityNotFoundError("Libro no encontrado")
         return LibroRead.model_validate(libro)
 
 
@@ -112,14 +114,11 @@ async def update_libro(
     libro_id: int,
     payload: LibroUpdate,
 ) -> LibroRead:
-    """Actualiza parcialmente un libro activo (solo título y precio) traduciendo errores a 409 (RN-12)."""
+    """Actualiza parcialmente un libro activo (solo título y precio) traduciendo errores a ConflictError (RN-12)."""
     async with uow:
         libro = await uow.libros.get_by_id(libro_id)
         if libro is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Libro no encontrado",
-            )
+            raise EntityNotFoundError("Libro no encontrado")
         updates = payload.model_dump(exclude_unset=True)
         try:
             await uow.libros.update(libro, updates)
@@ -134,14 +133,11 @@ async def delete_libro(
     uow: LibrosUnitOfWork,
     libro_id: int,
 ) -> None:
-    """Realiza la baja lógica de un libro marcando borrado_en (RN-13) o lanza 404."""
+    """Realiza la baja lógica de un libro marcando borrado_en (RN-13) o lanza EntityNotFoundError."""
     async with uow:
         libro = await uow.libros.get_by_id(libro_id)
         if libro is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Libro no encontrado",
-            )
+            raise EntityNotFoundError("Libro no encontrado")
         await uow.libros.soft_delete(libro)
 
 
@@ -153,24 +149,15 @@ async def reponer_stock(
 ) -> LibroRead:
     """Repone stock a un libro activo mediante el punto único de stock (RN-11)."""
     if cantidad <= 0:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="La cantidad a reponer debe ser mayor a 0",
-        )
+        raise BusinessRuleViolationError("La cantidad a reponer debe ser mayor a 0")
 
     async with uow:
         libro = await uow.libros.get_by_id(libro_id)
         if libro is None:
             hist = await uow.libros.get_by_id_including_deleted(libro_id)
             if hist is not None and hist.borrado_en is not None:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="No se puede reponer stock de un libro dado de baja",
-                )
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Libro no encontrado",
-            )
+                raise ConflictError("No se puede reponer stock de un libro dado de baja")
+            raise EntityNotFoundError("Libro no encontrado")
 
         try:
             await uow.registrar_movimiento_stock(
@@ -180,10 +167,7 @@ async def reponer_stock(
                 usuario_id=usuario_id,
             )
         except ValueError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=str(exc),
-            ) from exc
+            raise ConflictError(str(exc)) from exc
 
         detalle = await uow.libros.get_detalle(libro_id)
         return LibroRead.model_validate(detalle)
@@ -193,13 +177,10 @@ async def list_movimientos(
     uow: LibrosUnitOfWork,
     libro_id: int,
 ) -> list[MovimientoStockRead]:
-    """Lista cronológicamente todos los movimientos de stock del libro (ADMIN) o lanza 404."""
+    """Lista cronológicamente todos los movimientos de stock del libro (ADMIN) o lanza EntityNotFoundError."""
     async with uow:
         hist = await uow.libros.get_by_id_including_deleted(libro_id)
         if hist is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Libro no encontrado",
-            )
+            raise EntityNotFoundError("Libro no encontrado")
         movimientos = await uow.movimientos.get_movimientos_by_libro(libro_id)
         return [MovimientoStockRead.model_validate(m) for m in movimientos]

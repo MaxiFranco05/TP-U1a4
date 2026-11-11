@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import get_settings
 from app.core.database import build_engine, build_session_factory
+from app.core.exceptions import DomainError
 from app.core.paginacion import PaginatedResponse
 from app.core.repository import BaseRepository
 from app.core.unit_of_work import UnitOfWork
@@ -239,7 +240,7 @@ async def test_task_1_2_clientes_service_crud_and_forbid(
         assert creado.perfil is None
 
         # 3. Email duplicado -> 409 sin texto interno de BD
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises((HTTPException, DomainError)) as exc_info:
             await crear_cliente(uow, payload)
         assert exc_info.value.status_code == 409
         assert "duplicate key" not in str(exc_info.value.detail).lower()
@@ -249,7 +250,7 @@ async def test_task_1_2_clientes_service_crud_and_forbid(
         assert obtenido.id == creado.id
 
         # 5. Obtener cliente inexistente -> 404
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises((HTTPException, DomainError)) as exc_info:
             await obtener_cliente(uow, 999999)
         assert exc_info.value.status_code == 404
 
@@ -260,7 +261,7 @@ async def test_task_1_2_clientes_service_crud_and_forbid(
         assert actualizado.nombre == f"Ana Modificada {suffix}"
 
         # 7. Actualizar cliente inexistente -> 404
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises((HTTPException, DomainError)) as exc_info:
             await actualizar_cliente(uow, 999999, ClienteUpdate(nombre="Fantasma"))
         assert exc_info.value.status_code == 404
 
@@ -274,7 +275,7 @@ async def test_task_1_2_clientes_service_crud_and_forbid(
         assert perf.cliente_id == creado.id
 
         # 9. Segundo perfil para mismo cliente -> 409
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises((HTTPException, DomainError)) as exc_info:
             await crear_perfil(
                 uow,
                 creado.id,
@@ -283,7 +284,7 @@ async def test_task_1_2_clientes_service_crud_and_forbid(
         assert exc_info.value.status_code == 409
 
         # 10. Crear perfil para cliente inexistente -> 404
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises((HTTPException, DomainError)) as exc_info:
             await crear_perfil(
                 uow,
                 999999,
@@ -292,7 +293,7 @@ async def test_task_1_2_clientes_service_crud_and_forbid(
         assert exc_info.value.status_code in (404, 409)
 
         # 11. Listar ventas de cliente inexistente -> 404
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises((HTTPException, DomainError)) as exc_info:
             await obtener_ventas_cliente(uow, 999999)
         assert exc_info.value.status_code == 404
 
@@ -861,7 +862,7 @@ async def test_task_2_3_crear_venta_atomica_y_stock(
                 RenglonVentaCreate(libro_id=l2_id, cantidad=10),
             ],
         )
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises((HTTPException, DomainError)) as exc_info:
             await crear_venta(uow, data_insuf, usuario_actual_id=vendedor_id)
         assert exc_info.value.status_code == 409
 
@@ -895,7 +896,7 @@ async def test_task_2_3_crear_venta_atomica_y_stock(
             cliente_id=cli_id,
             renglones=[RenglonVentaCreate(libro_id=l2_id, cantidad=1)],
         )
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises((HTTPException, DomainError)) as exc_info:
             await crear_venta(uow, data_baja, usuario_actual_id=vendedor_id)
         assert exc_info.value.status_code == 409
 
@@ -906,7 +907,7 @@ async def test_task_2_3_crear_venta_atomica_y_stock(
             cliente_id=999999,
             renglones=[RenglonVentaCreate(libro_id=l1_id, cantidad=1)],
         )
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises((HTTPException, DomainError)) as exc_info:
             await crear_venta(uow, data_cli_inex, usuario_actual_id=vendedor_id)
         assert exc_info.value.status_code == 409
 

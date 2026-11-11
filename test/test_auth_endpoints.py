@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
+from app.core.exceptions import DomainError
 from app.modules.clientes.models import Cliente
 
 
@@ -411,7 +412,7 @@ class TestAuthServiceRegistro:
             password="Password123!",
         )
 
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises((HTTPException, DomainError)) as exc_info:
             await service.registro(datos=req, uow=uow)
 
         assert exc_info.value.status_code == 409
@@ -511,7 +512,7 @@ class TestAuthServiceLogin:
             )
 
         req = LoginRequest(email="bad_pass@test.com", password="WrongPassword!")
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises((HTTPException, DomainError)) as exc_info:
             await service.login(
                 datos=req,
                 client_ip="127.0.0.1",
@@ -550,7 +551,7 @@ class TestAuthServiceLogin:
         dummy_hash = await hash_password("dummy")
 
         req = LoginRequest(email="non_existent@test.com", password="SomePassword123!")
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises((HTTPException, DomainError)) as exc_info:
             await service.login(
                 datos=req,
                 client_ip="127.0.0.1",
@@ -605,7 +606,7 @@ class TestAuthServiceLogin:
                 )
 
         req = LoginRequest(email=email, password="AnyPassword123!")
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises((HTTPException, DomainError)) as exc_info:
             await service.login(
                 datos=req,
                 client_ip=ip,
@@ -740,7 +741,7 @@ class TestAuthServiceYoAndCambiarPassword:
             password_nueva="NewPassword456!",
         )
 
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises((HTTPException, DomainError)) as exc_info:
             await service.cambiar_password(usuario=u, datos=req, uow=uow)
 
         assert exc_info.value.status_code == 401

@@ -11,7 +11,11 @@ from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
-from app.core.exceptions import translate_integrity_error
+from app.core.exceptions import (
+    ConflictError,
+    InsufficientStockError,
+    translate_integrity_error,
+)
 from app.core.pagination import PaginationParams
 from app.modules.libros.models import Libro
 from app.modules.ventas.models import RenglonVenta, Venta
@@ -55,17 +59,24 @@ async def crear_venta(
     missing_libros = [lid for lid in libro_ids if lid not in libros_dict]
     if missing_libros:
         # Lanzar error controlado para libro no encontrado (RN-12)
-        from fastapi import HTTPException, status
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="El libro referenciado no existe"
-        )
+        raise ConflictError("El libro referenciado no existe")
 
-    # 4. Construir renglones con precio_unitario copiado del libro
+    # 4. Construir renglones con precio_unitario copiado del libro y descontar stock
     renglones_models = []
     total = Decimal("0")
     for renglon_data in data.renglones:
         libro = libros_dict[renglon_data.libro_id]
+
+        # Validar stock suficiente (RN-11)
+        if libro.stock < renglon_data.cantidad:
+            raise InsufficientStockError(
+                f"Stock insuficiente para '{libro.titulo}'. Stock disponible: {libro.stock}, cantidad solicitada: {renglon_data.cantidad}."
+            )
+
+        # Descontar stock
+        libro.stock -= renglon_data.cantidad
+        session.add(libro)
+
         precio_unitario = libro.precio
         subtotal = Decimal(str(renglon_data.cantidad)) * precio_unitario
         total += subtotal

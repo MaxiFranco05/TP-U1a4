@@ -1,9 +1,8 @@
 """Lógica de negocio del módulo generos sobre UnitOfWork y Repository."""
 
-from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 
-from app.core.exceptions import translate_integrity_error
+from app.core.exceptions import EntityNotFoundError, translate_integrity_error
 from app.core.paginacion import PaginatedResponse, PaginationParams, paginate
 from app.modules.generos.models import Genero
 from app.modules.generos.schemas import (
@@ -49,14 +48,11 @@ async def get_genero(
     uow: GenerosUnitOfWork,
     genero_id: int,
 ) -> GeneroRead:
-    """Devuelve el DTO de lectura de un género existente o lanza 404."""
+    """Devuelve el DTO de lectura de un género existente o lanza EntityNotFoundError si no existe."""
     async with uow:
         genero = await uow.generos.get_by_id(genero_id)
         if genero is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Género no encontrado",
-            )
+            raise EntityNotFoundError("Género no encontrado")
         return GeneroRead.model_validate(genero)
 
 
@@ -65,14 +61,11 @@ async def update_genero(
     genero_id: int,
     payload: GeneroUpdate,
 ) -> GeneroRead:
-    """Actualiza parcialmente un género traduciendo colisiones de unicidad a 409 (RN-12)."""
+    """Actualiza parcialmente un género traduciendo colisiones de unicidad a ConflictError (RN-12)."""
     async with uow:
         genero = await uow.generos.get_by_id(genero_id)
         if genero is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Género no encontrado",
-            )
+            raise EntityNotFoundError("Género no encontrado")
         updates = payload.model_dump(exclude_unset=True)
         try:
             await uow.generos.update(genero, updates)
@@ -90,10 +83,7 @@ async def list_libros_by_genero(
     async with uow:
         genero = await uow.generos.get_by_id(genero_id)
         if genero is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Género no encontrado",
-            )
+            raise EntityNotFoundError("Género no encontrado")
         filters = (Libro.genero_id == genero_id,)
         total = await uow.libros.count(filters=filters)
         libros = await uow.libros.get_all(

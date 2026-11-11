@@ -5,11 +5,13 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 import bcrypt
-from fastapi import APIRouter, Depends, FastAPI
+from fastapi import APIRouter, Depends, FastAPI, Request
+from fastapi.responses import JSONResponse
 
 from app.core.config import get_settings
 from app.core.database import build_engine, build_session_factory
 from app.core.dependencies import requiere_rol, verificar_password_cambiada
+from app.core.exceptions import DomainError
 from app.modules.autores import models as _autores_models  # noqa: F401
 from app.modules.autores.router import (
     protected_router as autores_protected_router,
@@ -146,6 +148,19 @@ def create_app() -> FastAPI:
         version="0.2.0",
         lifespan=lifespan,
     )
+
+    @application.exception_handler(DomainError)
+    async def domain_error_exception_handler(
+        request: Request,
+        exc: DomainError,
+    ) -> JSONResponse:
+        """Traduce cualquier error del dominio a una respuesta HTTP estandarizada (U-06)."""
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail},
+            headers=exc.headers or None,
+        )
+
     open_group, protected_group = _build_route_groups()
     application.include_router(open_group)
     application.include_router(protected_group)

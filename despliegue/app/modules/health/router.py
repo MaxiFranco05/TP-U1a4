@@ -3,10 +3,11 @@
 from fastapi import APIRouter
 
 from app.core.database import SessionDep
+from app.core.exceptions import DomainRoute
 from app.modules.health.schemas import HealthLiveResponse, HealthReadyResponse
 from app.modules.health.service import check_liveness, check_readiness
 
-router = APIRouter(prefix="/health", tags=["health"])
+router = APIRouter(prefix="/health", tags=["health"], route_class=DomainRoute)
 
 
 @router.get("/live")

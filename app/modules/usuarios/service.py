@@ -1,12 +1,18 @@
 """Servicio de dominio para autenticación, gestión de credenciales y auditoría (/auth)."""
 
 from datetime import datetime, timezone
-from fastapi import HTTPException, status
+
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import get_settings
-from app.core.exceptions import translate_integrity_error
+from app.core.exceptions import (
+    AuthenticationError,
+    ConflictError,
+    EntityNotFoundError,
+    RateLimitExceededError,
+    translate_integrity_error,
+)
 from app.core.paginacion import PaginatedResponse, PaginationParams, paginate
 from app.core.security import create_access_token, decode_access_token, hash_password, verify_password
 from app.modules.clientes.models import Cliente
@@ -67,7 +73,7 @@ class AuthService:
 
         1. Calcula bcrypt hash fuera del UoW (DD-10).
         2. Dentro de async with uow: persiste Usuario, AsignacionRol('CLIENTE') y Cliente.
-        3. Traduce IntegrityError por email repetido a 409 Conflict.
+        3. Traduce IntegrityError por email repetido a ConflictError (RN-12).
         """
         hashed_password = await hash_password(datos.password)
 
@@ -98,10 +104,7 @@ class AuthService:
         except IntegrityError as exc:
             translated = translate_integrity_error(exc)
             if translated.detail == "Error de integridad de la base de datos":
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Email ya registrado",
-                ) from exc
+                raise ConflictError("Email ya registrado") from exc
             raise translated from exc
 
         return usuario
@@ -130,10 +133,9 @@ class AuthService:
                 ip=client_ip,
                 exito=False,
             )
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            raise RateLimitExceededError(
                 detail="Demasiados intentos fallidos",
-                headers={"Retry-After": "60"},
+                retry_after=60,
             )
 
         # 2. Verificación de credenciales en tiempo constante (RN-08)
@@ -147,10 +149,7 @@ class AuthService:
                 ip=client_ip,
                 exito=False,
             )
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Credenciales inválidas",
-            )
+            raise AuthenticationError("Credenciales inválidas")
 
         es_valido = await verify_password(datos.password, usuario.password_hash)
         if not es_valido:
@@ -160,10 +159,7 @@ class AuthService:
                 ip=client_ip,
                 exito=False,
             )
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Credenciales inválidas",
-            )
+            raise AuthenticationError("Credenciales inválidas")
 
         # 3. Éxito: auditar y emitir token
         await self._registrar_intento_independiente(
@@ -208,10 +204,7 @@ class AuthService:
         """Cambia la contraseña del usuario verificando la actual y registrando en evento_seguridad (RN-06, RN-16, C-09)."""
         es_valida = await verify_password(datos.password_actual, usuario.password_hash)
         if not es_valida:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Contraseña actual incorrecta",
-            )
+            raise AuthenticationError("Contraseña actual incorrecta")
 
         nuevo_hash = await hash_password(datos.password_nueva)
 
@@ -242,7 +235,7 @@ class UsuarioService:
            - Crea Usuario con debe_cambiar_password=True y activo=True.
            - Crea AsignacionRol inicial con otorgada_por=admin_actor.id.
            - Registra EventoSeguridad con acción 'ALTA_PERSONAL'.
-        3. Traduce colisión de email duplicado a 409 Conflict.
+        3. Traduce colisión de email duplicado a ConflictError.
         """
         hashed_password = await hash_password(datos.password)
 
@@ -273,10 +266,7 @@ class UsuarioService:
         except IntegrityError as exc:
             translated = translate_integrity_error(exc)
             if translated.detail == "Error de integridad de la base de datos":
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="El correo electrónico ya está registrado",
-                ) from exc
+                raise ConflictError("El correo electrónico ya está registrado") from exc
             raise translated from exc
 
         return usuario
@@ -286,13 +276,10 @@ class UsuarioService:
         usuario_id: int,
         uow: UsuariosUnitOfWork,
     ) -> list[AsignacionRol]:
-        """Devuelve el historial completo de asignaciones de un usuario (404 si no existe)."""
+        """Devuelve el historial completo de asignaciones de un usuario (EntityNotFoundError si no existe)."""
         usuario = await uow.usuarios.get_by_id(usuario_id)
         if usuario is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Usuario no encontrado",
-            )
+            raise EntityNotFoundError("Usuario no encontrado")
         return await uow.asignaciones_rol.get_asignaciones_usuario(usuario_id)
 
     async def asignar_rol(
@@ -305,10 +292,7 @@ class UsuarioService:
         """Asigna un rol con vigencia, reemplazando asignaciones previas vencidas (RN-03, RN-16, C-07)."""
         usuario = await uow.usuarios.get_by_id(usuario_id)
         if usuario is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Usuario no encontrado",
-            )
+            raise EntityNotFoundError("Usuario no encontrado")
 
         now = datetime.now(timezone.utc)
         rol_nombre = datos.rol.upper()
@@ -328,11 +312,7 @@ class UsuarioService:
                     await uow.asignaciones_rol.update(asig_abierta)
                     await uow.session.flush()
                 else:
-                    raise HTTPException(
-                        status_code=status.HTTP_409_CONFLICT,
-                        detail="El usuario ya tiene ese rol asignado",
-                    )
-
+                    raise ConflictError("El usuario ya tiene ese rol asignado")
 
             nueva_asig = AsignacionRol(
                 usuario_id=usuario_id,
@@ -360,19 +340,16 @@ class UsuarioService:
         """Revoca lógicamente un rol de un usuario con autoprotección de administrador (RN-05, RN-16, C-08).
 
         Directiva de comprobaciones en orden:
-        1. Verificar existencia del usuario destino (404 si no existe).
-        2. Buscar la asignación activa (revocada_en IS NULL y sin vencer) para (usuario_id, rol) (404 si no la posee).
+        1. Verificar existencia del usuario destino (EntityNotFoundError si no existe).
+        2. Buscar la asignación activa (revocada_en IS NULL y sin vencer) para (usuario_id, rol) (EntityNotFoundError si no la posee).
         3. Si rol.upper() == 'ADMIN':
-           - Si usuario_id == admin_actor.id: rechazar 409 (intento de auto-revocación).
-           - Si contar_admins_vigentes() <= 1: rechazar 409 (último administrador restante).
+           - Si usuario_id == admin_actor.id: rechazar ConflictError (intento de auto-revocación).
+           - Si contar_admins_vigentes() <= 1: rechazar ConflictError (último administrador restante).
         4. Proceder a la revocación lógica (revocada_en = now()) y registro en evento_seguridad.
         """
         usuario = await uow.usuarios.get_by_id(usuario_id)
         if usuario is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Usuario no encontrado",
-            )
+            raise EntityNotFoundError("Usuario no encontrado")
 
         rol_nombre = rol.upper()
         asig_activa = await uow.asignaciones_rol.get_asignacion_activa_por_rol(
@@ -380,24 +357,15 @@ class UsuarioService:
             rol=rol_nombre,
         )
         if asig_activa is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"El usuario no posee el rol '{rol_nombre}' activo",
-            )
+            raise EntityNotFoundError(f"El usuario no posee el rol '{rol_nombre}' activo")
 
         if rol_nombre == "ADMIN":
             if usuario_id == admin_actor.id:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="No es posible auto-revocarse el rol de administrador",
-                )
+                raise ConflictError("No es posible auto-revocarse el rol de administrador")
 
             total_admins = await uow.asignaciones_rol.contar_admins_vigentes()
             if total_admins <= 1:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="No es posible revocar al único administrador vigente del sistema",
-                )
+                raise ConflictError("No es posible revocar al único administrador vigente del sistema")
 
         now = datetime.now(timezone.utc)
         async with uow:
@@ -423,7 +391,3 @@ class UsuarioService:
         )
         dtos = [EventoSeguridadResponse.model_validate(e) for e in items]
         return paginate(items=dtos, total=total, page=params.page, size=params.size)
-
-
-
-

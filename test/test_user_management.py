@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
+from app.core.exceptions import DomainError
 from app.modules.usuarios.models import AsignacionRol, EventoSeguridad, Usuario
 from app.modules.usuarios.repository import AsignacionRolRepository, EventoSeguridadRepository
 from app.modules.usuarios.schemas import (
@@ -329,7 +330,7 @@ class TestUsuarioServicePersonal:
             rol="VENDEDOR",
         )
 
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises((HTTPException, DomainError)) as exc_info:
             await service.crear_personal(
                 admin_actor=admin_actor,
                 datos=req,
@@ -356,7 +357,7 @@ class TestUsuarioServiceRoles:
         uow = UsuariosUnitOfWork(session=in_memory_session)
         service = UsuarioService()
 
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises((HTTPException, DomainError)) as exc_info:
             await service.listar_roles(usuario_id=999, uow=uow)
         assert exc_info.value.status_code == 404
         assert "Usuario no encontrado" in exc_info.value.detail
@@ -392,7 +393,7 @@ class TestUsuarioServiceRoles:
         assert asig.revocada_en is None
 
         # Reintentar asignar VENDEDOR mientras está vigente -> 409
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises((HTTPException, DomainError)) as exc_info:
             await service.asignar_rol(admin_actor=admin, usuario_id=user.id, datos=req, uow=uow)
         assert exc_info.value.status_code == 409
         assert "ya tiene ese rol asignado" in exc_info.value.detail
@@ -503,12 +504,12 @@ class TestUsuarioServiceRevocacionYEventos:
         service = UsuarioService()
 
         # 1. Usuario inexistente -> 404
-        with pytest.raises(HTTPException) as exc1:
+        with pytest.raises((HTTPException, DomainError)) as exc1:
             await service.revocar_rol(admin_actor=admin, usuario_id=9999, rol="ADMIN", uow=uow)
         assert exc1.value.status_code == 404
 
         # 2. Usuario existente pero sin el rol -> 404 (directiva auditor: no dar 409 de último admin si ni siquiera tiene el rol)
-        with pytest.raises(HTTPException) as exc2:
+        with pytest.raises((HTTPException, DomainError)) as exc2:
             await service.revocar_rol(admin_actor=admin, usuario_id=otro.id, rol="ADMIN", uow=uow)
         assert exc2.value.status_code == 404
 
@@ -537,7 +538,7 @@ class TestUsuarioServiceRevocacionYEventos:
         uow = UsuariosUnitOfWork(session=in_memory_session)
         service = UsuarioService()
 
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises((HTTPException, DomainError)) as exc_info:
             await service.revocar_rol(admin_actor=admin1, usuario_id=admin1.id, rol="ADMIN", uow=uow)
         assert exc_info.value.status_code == 409
         assert "auto-revocarse" in exc_info.value.detail
@@ -566,7 +567,7 @@ class TestUsuarioServiceRevocacionYEventos:
         uow = UsuariosUnitOfWork(session=in_memory_session)
         service = UsuarioService()
 
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises((HTTPException, DomainError)) as exc_info:
             await service.revocar_rol(admin_actor=admin_actor, usuario_id=target_admin.id, rol="ADMIN", uow=uow)
         assert exc_info.value.status_code == 409
         assert "único administrador" in exc_info.value.detail

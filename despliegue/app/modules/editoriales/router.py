@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Path, Query, status
 
 from app.core.database import SessionDep
+from app.core.exceptions import DomainRoute
 from app.core.pagination import PaginationParams, get_pagination_params
 from app.modules.editoriales.schemas import (
     EditorialCreate,
@@ -21,7 +22,7 @@ from app.modules.editoriales.service import (
 )
 from app.modules.libros.schemas import LibroListItem
 
-router = APIRouter(prefix="/editoriales", tags=["editoriales"])
+router = APIRouter(prefix="/editoriales", tags=["editoriales"], route_class=DomainRoute)
 
 EditorialIdPath = Annotated[int, Path(ge=1)]
 

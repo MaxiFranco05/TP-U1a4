@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
 from app.core.dependencies import get_usuario_actual, requiere_rol
+from app.core.exceptions import DomainRoute
 from app.core.paginacion import PaginatedResponse, PaginationParams
 from app.modules.usuarios.models import Usuario
 from app.modules.ventas.schemas import (
@@ -31,8 +32,8 @@ def get_ventas_uow(
     return VentasUnitOfWork(session=session)
 
 
-router = APIRouter(prefix="/ventas", tags=["ventas"])
-mis_ventas_router = APIRouter(prefix="/mis-ventas", tags=["ventas"])
+router = APIRouter(prefix="/ventas", tags=["ventas"], route_class=DomainRoute)
+mis_ventas_router = APIRouter(prefix="/mis-ventas", tags=["ventas"], route_class=DomainRoute)
 
 VentaIdPath = Annotated[int, Path(ge=1)]
 

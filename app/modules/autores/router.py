@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
+from app.core.exceptions import DomainRoute
 from app.core.paginacion import PaginatedResponse, PaginationParams
 from app.modules.autores.schemas import (
     AutorCreate,
@@ -28,8 +29,8 @@ def get_autores_uow(
     return AutoresUnitOfWork(session=session)
 
 
-public_router = APIRouter(prefix="/autores", tags=["Autores"])
-protected_router = APIRouter(prefix="/autores", tags=["Autores"])
+public_router = APIRouter(prefix="/autores", tags=["Autores"], route_class=DomainRoute)
+protected_router = APIRouter(prefix="/autores", tags=["Autores"], route_class=DomainRoute)
 
 
 # --- Rutas Públicas (Lectura Abierta) ---

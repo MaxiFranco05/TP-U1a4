@@ -3,10 +3,12 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 
 from app.core.config import get_settings
 from app.core.database import build_engine, build_session_factory
+from app.core.exceptions import DomainError
 from app.modules.autores import models as _autores_models  # noqa: F401
 from app.modules.autores.router import router as autores_router
 from app.modules.clientes import models as _clientes_models  # noqa: F401
@@ -46,6 +48,19 @@ def create_app() -> FastAPI:
         version="0.1.0",
         lifespan=lifespan,
     )
+
+    @application.exception_handler(DomainError)
+    async def domain_error_exception_handler(
+        request: Request,
+        exc: DomainError,
+    ) -> JSONResponse:
+        """Traduce cualquier error del dominio a una respuesta HTTP estandarizada (U-06)."""
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail},
+            headers=exc.headers or None,
+        )
+
     application.include_router(health_router)
     application.include_router(editoriales_router)
     application.include_router(generos_router)

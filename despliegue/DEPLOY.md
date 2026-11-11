@@ -6,11 +6,14 @@ Este documento detalla la puesta en producción del Trabajo Práctico de los Cap
 
 ## 1. Datos Generales del Despliegue
 
-- **URL Pública del Servicio**: `http://vps-utn.libreria-tp.lat:8000` (o `http://194.164.72.105:8000`)
-- **Fecha y Hora del Despliegue**: 2026-11-04 18:00:00 UTC-03:00
-- **Servidor Anfitrión**: Ubuntu Server 24.04 LTS (x86_64), VPS Hostinger / Contabo
+- **URL Pública del Servicio (Principal)**: `https://api.libreria.maximofranco.me`
+- **URL Pública del Servicio (Alternativa Easypanel)**: `https://localhost-parcial-libreria.oyerue.easypanel.host`
+- **IP Pública del Servidor VPS**: `179.199.130.181`
+- **Swagger / OpenAPI Docs**: `https://api.libreria.maximofranco.me/docs` (o `https://localhost-parcial-libreria.oyerue.easypanel.host/docs`)
+- **Fecha y Hora de Verificación**: 2026-11-11 10:25:00 UTC-03:00
+- **Servidor Anfitrión**: Ubuntu Server 24.04 LTS (x86_64) en VPS
 - **Motor de Contenedores**: Docker Engine 26.1 / 27.0
-- **Base de Datos**: PostgreSQL 16 corriendo nativo en el servidor (puerto 5432)
+- **Base de Datos**: PostgreSQL 16 corriendo en red interna de contenedores (puerto 5432)
 
 ---
 
@@ -104,7 +107,7 @@ No se requirió ninguna modificación en la lógica de negocio ni en los modelos
 |---|---|---|---|---|
 | **D-01** | Imagen base y tamaño | `docker images \| grep -E "(libreria\|python)"` | `python:3.12-alpine` pesa ~75 MB (< 100 MB). La imagen de la aplicación con dependencias ronda ~150-180 MB. | `despliegue/evidencia/d01_docker_images.txt` |
 | **D-02** | Servidor limpio, arranque y migraciones | `docker build` + `docker run`; `docker ps` y `docker logs libreria` | Contenedor en estado `healthy`. Logs muestran `alembic upgrade head` ejecutado con éxito antes de levantar `uvicorn`. | `despliegue/evidencia/d02_docker_ps_logs.txt` |
-| **D-03** | Endpoints públicos desde el exterior | `curl -i http://<VPS_URL>:8000/health/ready`<br>`curl -i http://<VPS_URL>:8000/libros/`<br>`curl -i -X POST http://<VPS_URL>:8000/ventas/ -d @venta_ejemplo.json` | 200 `{"estado": "listo"}`; 200 con la lista de 5 libros del TP; 201 con total calculado ($145.00) y stock descontado. | `despliegue/evidencia/d03_curl_public_url.txt` |
+| **D-03** | Endpoints públicos desde el exterior | `curl -i https://api.libreria.maximofranco.me/health/ready`<br>`curl -i https://api.libreria.maximofranco.me/libros/`<br>`curl -i https://localhost-parcial-libreria.oyerue.easypanel.host/health/ready` | 200 `{"estado": "listo"}`; 200 con la lista de libros del catálogo; 200 en endpoint alternativo. | `despliegue/evidencia/d03_curl_public_url.txt` |
 | **D-04** | Persistencia tras reinicio de contenedor | `docker rm -f libreria && docker run ...` | Contenedor vuelve a estar `healthy`. Los libros y ventas previas siguen intactos. Las migraciones no se repiten (`alembic` detecta head). | `despliegue/evidencia/d04_persistence_reboot.txt` |
 | **D-05** | Fallo seguro sin DATABASE_URL | `docker run --rm libreria:tp1a4` (sin `--env-file`) | El contenedor termina inmediatamente con error de configuración (código != 0), impidiendo arrancar sin base. | `despliegue/evidencia/d05_missing_env_error.txt` |
 | **D-06** | Ausencia de secretos en la imagen | `docker run --rm --entrypoint ls libreria:tp1a4 -a /app`<br>`docker run --rm --entrypoint env libreria:tp1a4` | No existe archivo `.env`. `env` no muestra `DATABASE_URL` ni contraseñas horneadas en las capas. | `despliegue/evidencia/d06_no_secrets.txt` |

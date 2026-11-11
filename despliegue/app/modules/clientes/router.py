@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Path, status
 
 from app.core.database import SessionDep
+from app.core.exceptions import DomainRoute
 from app.core.pagination import PaginationParams, get_pagination_params
 from app.modules.clientes.schemas import (
     ClienteCreate,
@@ -24,7 +25,7 @@ from app.modules.clientes.service import (
 )
 from app.modules.ventas.schemas import VentaRead
 
-router = APIRouter(prefix="/clientes", tags=["clientes"])
+router = APIRouter(prefix="/clientes", tags=["clientes"], route_class=DomainRoute)
 
 ClienteIdPath = Annotated[int, Path(ge=1)]
 

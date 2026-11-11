@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
+from app.core.exceptions import DomainRoute
 from app.core.paginacion import PaginatedResponse, PaginationParams
 from app.modules.editoriales.schemas import (
     EditorialCreate,
@@ -29,8 +30,8 @@ def get_editoriales_uow(
     return EditorialesUnitOfWork(session=session)
 
 
-public_router = APIRouter(prefix="/editoriales", tags=["Editoriales"])
-protected_router = APIRouter(prefix="/editoriales", tags=["Editoriales"])
+public_router = APIRouter(prefix="/editoriales", tags=["Editoriales"], route_class=DomainRoute)
+protected_router = APIRouter(prefix="/editoriales", tags=["Editoriales"], route_class=DomainRoute)
 
 
 # --- Rutas Públicas (Lectura Abierta) ---

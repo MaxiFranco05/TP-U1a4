@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Path, Query, status
 
 from app.core.database import SessionDep
+from app.core.exceptions import DomainRoute
 from app.modules.generos.schemas import (
     GeneroCreate,
     GeneroLibroRead,
@@ -19,7 +20,7 @@ from app.modules.generos.service import (
     update_genero,
 )
 
-router = APIRouter(prefix="/generos", tags=["generos"])
+router = APIRouter(prefix="/generos", tags=["generos"], route_class=DomainRoute)
 
 LimitQuery = Annotated[int, Query(ge=1, le=100)]
 OffsetQuery = Annotated[int, Query(ge=0)]

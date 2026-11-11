@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
+from app.core.exceptions import DomainRoute
 from app.core.paginacion import PaginatedResponse, PaginationParams
 from app.modules.generos.schemas import (
     GeneroCreate,
@@ -28,8 +29,8 @@ def get_generos_uow(
     return GenerosUnitOfWork(session=session)
 
 
-public_router = APIRouter(prefix="/generos", tags=["Géneros"])
-protected_router = APIRouter(prefix="/generos", tags=["Géneros"])
+public_router = APIRouter(prefix="/generos", tags=["Géneros"], route_class=DomainRoute)
+protected_router = APIRouter(prefix="/generos", tags=["Géneros"], route_class=DomainRoute)
 
 
 # --- Rutas Públicas (Lectura Abierta) ---

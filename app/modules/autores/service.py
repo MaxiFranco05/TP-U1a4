@@ -1,9 +1,8 @@
 """Lógica de negocio del módulo autores sobre UnitOfWork y Repository."""
 
-from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 
-from app.core.exceptions import translate_integrity_error
+from app.core.exceptions import EntityNotFoundError, translate_integrity_error
 from app.core.paginacion import PaginatedResponse, PaginationParams, paginate
 from app.modules.autores.models import Autor
 from app.modules.autores.schemas import (
@@ -48,14 +47,11 @@ async def get_autor(
     uow: AutoresUnitOfWork,
     autor_id: int,
 ) -> AutorRead:
-    """Devuelve el DTO de lectura de un autor existente o lanza 404."""
+    """Devuelve el DTO de lectura de un autor existente o lanza error de dominio si no existe."""
     async with uow:
         autor = await uow.autores.get_by_id(autor_id)
         if autor is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Autor no encontrado",
-            )
+            raise EntityNotFoundError("Autor no encontrado")
         return AutorRead.model_validate(autor)
 
 
@@ -64,14 +60,11 @@ async def update_autor(
     autor_id: int,
     payload: AutorUpdate,
 ) -> AutorRead:
-    """Actualiza parcialmente un autor con exclude_unset=True traduciendo colisiones a 409 (RN-12)."""
+    """Actualiza parcialmente un autor con exclude_unset=True traduciendo colisiones a ConflictError (RN-12)."""
     async with uow:
         autor = await uow.autores.get_by_id(autor_id)
         if autor is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Autor no encontrado",
-            )
+            raise EntityNotFoundError("Autor no encontrado")
         updates = payload.model_dump(exclude_unset=True)
         try:
             await uow.autores.update(autor, updates)
@@ -89,10 +82,7 @@ async def list_libros_by_autor(
     async with uow:
         autor = await uow.autores.get_by_id(autor_id)
         if autor is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Autor no encontrado",
-            )
+            raise EntityNotFoundError("Autor no encontrado")
         pairs, total = await uow.autores.get_libros_autor_paginado(
             autor_id=autor_id,
             offset=params.offset,

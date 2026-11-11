@@ -1,12 +1,11 @@
 """Lógica de negocio del módulo clientes."""
 
-from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
-from app.core.exceptions import translate_integrity_error
+from app.core.exceptions import EntityNotFoundError, translate_integrity_error
 from app.modules.clientes.models import Cliente, PerfilCliente
 from app.modules.clientes.schemas import (
     ClienteCreate,
@@ -67,10 +66,7 @@ async def obtener_cliente_o_404(session: AsyncSession, cliente_id: int) -> Clien
     result = await session.execute(stmt)
     cliente = result.unique().scalar_one_or_none()
     if cliente is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Cliente no encontrado",
-        )
+        raise EntityNotFoundError("Cliente no encontrado")
     return cliente
 
 

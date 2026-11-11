@@ -1,11 +1,10 @@
 """Lógica de negocio del módulo clientes sobre UnitOfWork."""
 
-from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.orm import joinedload, selectinload
 
-from app.core.exceptions import translate_integrity_error
+from app.core.exceptions import EntityNotFoundError, translate_integrity_error
 from app.core.paginacion import PaginatedResponse, calcular_paginas, validar_pagina
 from app.modules.clientes.models import Cliente, PerfilCliente
 from app.modules.clientes.schemas import (
@@ -62,13 +61,10 @@ async def obtener_cliente_o_404(
     uow: ClientesUnitOfWork,
     cliente_id: int,
 ) -> Cliente:
-    """Obtiene un cliente con su perfil precargado o lanza HTTP 404."""
+    """Obtiene un cliente con su perfil precargado o lanza EntityNotFoundError si no existe."""
     cliente = await uow.clientes.get_con_perfil(cliente_id)
     if cliente is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Cliente no encontrado",
-        )
+        raise EntityNotFoundError("Cliente no encontrado")
     return cliente
 
 
@@ -87,7 +83,7 @@ async def actualizar_cliente(
     cliente_id: int,
     payload: ClienteUpdate,
 ) -> ClienteRead:
-    """Actualiza parcialmente un cliente existente y traduce colisiones a 409 (RN-12)."""
+    """Actualiza parcialmente un cliente existente y traduce colisiones a ConflictError (RN-12)."""
     async with uow:
         cliente = await obtener_cliente_o_404(uow, cliente_id)
         updates = payload.model_dump(exclude_unset=True)
@@ -106,14 +102,11 @@ async def crear_perfil(
     cliente_id: int,
     payload: PerfilClienteCreate,
 ) -> PerfilClienteRead:
-    """Crea el perfil de un cliente (RN-09: único por cliente). Traduce 409 y 404."""
+    """Crea el perfil de un cliente (RN-09: único por cliente). Traduce conflictos y no encontrado."""
     async with uow:
         cliente = await uow.clientes.get_by_id(cliente_id)
         if cliente is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Cliente no encontrado",
-            )
+            raise EntityNotFoundError("Cliente no encontrado")
 
         perfil = PerfilCliente(
             cliente_id=cliente_id,
@@ -138,10 +131,7 @@ async def obtener_ventas_cliente(
     async with uow:
         cliente = await uow.clientes.get_by_id(cliente_id)
         if cliente is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Cliente no encontrado",
-            )
+            raise EntityNotFoundError("Cliente no encontrado")
 
         count_stmt = (
             select(func.count())

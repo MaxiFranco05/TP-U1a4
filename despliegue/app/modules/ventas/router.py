@@ -5,11 +5,12 @@ from typing import Annotated
 from fastapi import APIRouter, BackgroundTasks, Depends, Path, status
 
 from app.core.database import SessionDep
+from app.core.exceptions import DomainRoute
 from app.core.pagination import PaginationParams, get_pagination_params
 from app.modules.ventas.schemas import VentaCreate, VentaListItem, VentaRead
 from app.modules.ventas.service import crear_venta, listar_ventas, obtener_venta
 
-router = APIRouter(prefix="/ventas", tags=["ventas"])
+router = APIRouter(prefix="/ventas", tags=["ventas"], route_class=DomainRoute)
 
 VentaIdPath = Annotated[int, Path(ge=1)]
 

@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import get_settings
 from app.core.database import build_engine, build_session_factory
+from app.core.exceptions import DomainError
 from app.core.repository import BaseRepository
 from app.core.unit_of_work import UnitOfWork
 from app.modules.autores.models import Autor
@@ -712,7 +713,7 @@ async def test_task_3_1_generos_autores_triangulation(
         assert g.id is not None
 
         # Conflicto 409 al duplicar nombre
-        with pytest.raises(HTTPException) as exc_409:
+        with pytest.raises((HTTPException, DomainError)) as exc_409:
             await create_genero(uow_gen, GeneroCreate(nombre=f"Gen Tri {suffix}"))
         assert exc_409.value.status_code == 409
         # Sin texto interno de BD en el detail
@@ -868,12 +869,12 @@ async def test_task_3_2_libros_service_crud_stock_and_soft_delete(
         await delete_libro(uow, libro_id)
 
         # GET /libros/{id} ahora da 404
-        with pytest.raises(HTTPException) as exc_404:
+        with pytest.raises((HTTPException, DomainError)) as exc_404:
             await get_libro(uow, libro_id)
         assert exc_404.value.status_code == 404
 
         # Reponer sobre libro dado de baja da 409
-        with pytest.raises(HTTPException) as exc_rep_sd:
+        with pytest.raises((HTTPException, DomainError)) as exc_rep_sd:
             await reponer_stock(uow, libro_id, cantidad=5, usuario_id=admin_id)
         assert exc_rep_sd.value.status_code == 409
 
@@ -895,7 +896,7 @@ async def test_task_3_2_libros_service_crud_stock_and_soft_delete(
         assert segundo_libro.isbn == isbn_test
 
         # Intentar crear un tercer libro vigente con el mismo ISBN da 409
-        with pytest.raises(HTTPException) as exc_isbn_dup:
+        with pytest.raises((HTTPException, DomainError)) as exc_isbn_dup:
             await create_libro(uow, payload_reutilizado, usuario_id=admin_id)
         assert exc_isbn_dup.value.status_code == 409
 
@@ -978,21 +979,21 @@ async def test_task_3_2_libros_triangulation_atomicity_and_edge_cases(
     # 1. Reposición con cantidad <= 0 debe responder 422
     async with session_factory() as session:
         uow = LibrosUnitOfWork(session=session)
-        with pytest.raises(HTTPException) as exc_zero:
+        with pytest.raises((HTTPException, DomainError)) as exc_zero:
             await reponer_stock(uow, l1_id, cantidad=0, usuario_id=admin_id)
         assert exc_zero.value.status_code == 422
 
-        with pytest.raises(HTTPException) as exc_neg:
+        with pytest.raises((HTTPException, DomainError)) as exc_neg:
             await reponer_stock(uow, l1_id, cantidad=-3, usuario_id=admin_id)
         assert exc_neg.value.status_code == 422
 
         # Reponer libro inexistente da 404
-        with pytest.raises(HTTPException) as exc_not_found:
+        with pytest.raises((HTTPException, DomainError)) as exc_not_found:
             await reponer_stock(uow, 999999, cantidad=5, usuario_id=admin_id)
         assert exc_not_found.value.status_code == 404
 
         # Movimientos de libro inexistente da 404
-        with pytest.raises(HTTPException) as exc_mov_404:
+        with pytest.raises((HTTPException, DomainError)) as exc_mov_404:
             await list_movimientos(uow, 999999)
         assert exc_mov_404.value.status_code == 404
 
@@ -1001,7 +1002,7 @@ async def test_task_3_2_libros_triangulation_atomicity_and_edge_cases(
         uow = LibrosUnitOfWork(session=session)
         count_mov_before = await uow.movimientos.count()
 
-        with pytest.raises(HTTPException) as exc_dup:
+        with pytest.raises((HTTPException, DomainError)) as exc_dup:
             await create_libro(
                 uow,
                 LibroCreate(

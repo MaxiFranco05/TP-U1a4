@@ -1,12 +1,11 @@
 """Lógica de negocio del módulo editoriales."""
 
-from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.exceptions import translate_integrity_error
+from app.core.exceptions import EntityNotFoundError, translate_integrity_error
 from app.modules.editoriales.models import Editorial
 from app.modules.editoriales.schemas import (
     EditorialCreate,
@@ -47,10 +46,7 @@ async def get_editorial_or_404(session: AsyncSession, editorial_id: int) -> Edit
     """Obtiene una editorial por su clave primaria o lanza HTTP 404."""
     editorial = await session.get(Editorial, editorial_id)
     if editorial is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Editorial no encontrada",
-        )
+        raise EntityNotFoundError("Editorial no encontrada")
     return editorial
 
 

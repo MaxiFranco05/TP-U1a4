@@ -3,13 +3,12 @@
 from decimal import Decimal
 from typing import List, Optional
 
-from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
-from app.core.exceptions import translate_integrity_error
+from app.core.exceptions import EntityNotFoundError, translate_integrity_error
 from app.modules.libros.models import Libro, LibroAutor
 from app.modules.libros.schemas import (
     AutorCreateNested,
@@ -120,10 +119,7 @@ async def get_libro(
     libro = result.unique().scalar_one_or_none()
 
     if libro is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Libro no encontrado",
-        )
+        raise EntityNotFoundError("Libro no encontrado")
 
     return _libro_to_read(libro)
 
@@ -147,10 +143,7 @@ async def update_libro(
     libro = result.unique().scalar_one_or_none()
 
     if libro is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Libro no encontrado",
-        )
+        raise EntityNotFoundError("Libro no encontrado")
 
     update_data = payload.model_dump(exclude_unset=True)
     for field, value in update_data.items():

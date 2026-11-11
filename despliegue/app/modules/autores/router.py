@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Path, status
 
 from app.core.database import SessionDep
+from app.core.exceptions import DomainRoute
 from app.core.pagination import PaginationParams, get_pagination_params
 from app.modules.autores.schemas import (
     AutorCreate,
@@ -19,7 +20,7 @@ from app.modules.autores.service import (
     update_autor,
 )
 
-router = APIRouter(prefix="/autores", tags=["autores"])
+router = APIRouter(prefix="/autores", tags=["autores"], route_class=DomainRoute)
 
 AutorIdPath = Annotated[int, Path(ge=1)]
 
